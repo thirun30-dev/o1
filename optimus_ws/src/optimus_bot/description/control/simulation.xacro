@@ -1,0 +1,167 @@
+<?xml version="1.0"?>
+<robot xmlns:xacro="http://www.ros.org/wiki/xacro">
+
+  <!--
+    Simulation backend:
+      classic - Gazebo Classic + gazebo_ros2_control (ROS 2 Humble)
+      gz      - Gazebo Sim (Harmonic) + gz_ros2_control (Jazzy and newer;
+                Gazebo Classic is not available there)
+      auto    - classic on Humble, gz otherwise (default)
+  -->
+  <xacro:arg name="sim_backend" default="auto"/>
+  <xacro:property name="sim_backend_requested" value="$(arg sim_backend)"/>
+  <xacro:property name="ros_distro" value="$(optenv ROS_DISTRO humble)"/>
+  <xacro:if value="${sim_backend_requested == 'auto'}">
+    <xacro:property name="sim_backend" value="${'classic' if ros_distro == 'humble' else 'gz'}"/>
+  </xacro:if>
+  <xacro:unless value="${sim_backend_requested == 'auto'}">
+    <xacro:property name="sim_backend" value="${sim_backend_requested}"/>
+  </xacro:unless>
+
+  <ros2_control
+    name="OptimusSimulationSystem"
+    type="system">
+
+    <hardware>
+      <xacro:if value="${sim_backend == 'classic'}">
+        <!-- Gazebo Classic plugin supplied by ros-humble-gazebo-ros2-control. -->
+        <plugin>gazebo_ros2_control/GazeboSystem</plugin>
+      </xacro:if>
+      <xacro:if value="${sim_backend == 'gz'}">
+        <!-- Gazebo Sim plugin supplied by ros-<distro>-gz-ros2-control. -->
+        <plugin>gz_ros2_control/GazeboSimSystem</plugin>
+      </xacro:if>
+    </hardware>
+
+    <joint name="left_joint">
+
+      <command_interface name="velocity"/>
+
+      <state_interface name="position"/>
+      <state_interface name="velocity"/>
+
+    </joint>
+
+    <joint name="right_joint">
+
+      <command_interface name="velocity"/>
+
+      <state_interface name="position"/>
+      <state_interface name="velocity"/>
+
+    </joint>
+
+  </ros2_control>
+
+  <!--
+    The simulator plugin creates the controller_manager inside the simulator
+    process. The controller YAML is loaded there rather than by a separate
+    ros2_control_node process.
+  -->
+  <gazebo>
+    <xacro:if value="${sim_backend == 'classic'}">
+      <plugin filename="libgazebo_ros2_control.so" name="gazebo_ros2_control">
+        <parameters>$(find optimus_bot)/config/controllers.yaml</parameters>
+      </plugin>
+    </xacro:if>
+    <xacro:if value="${sim_backend == 'gz'}">
+      <plugin filename="gz_ros2_control-system" name="gz_ros2_control::GazeboSimROS2ControlPlugin">
+        <parameters>$(find optimus_bot)/config/controllers.yaml</parameters>
+      </plugin>
+    </xacro:if>
+  </gazebo>
+
+  <!--
+    2-D lidar. It is deliberately simulation-only: the real robot's lidar is
+    started by lidar.launch.py and must not be replaced by a simulated sensor
+    outside this launch. Both backends publish a full 360-degree scan on /scan
+    (Gazebo Sim via the ros_gz bridge started by simulation.launch.py).
+  -->
+  <gazebo reference="lidar_link">
+    <xacro:if value="${sim_backend == 'classic'}">
+      <sensor name="optimus_lidar" type="ray">
+        <always_on>true</always_on>
+        <!-- Draw the scan fan in the Gazebo client for simulation debugging. -->
+        <visualize>true</visualize>
+        <update_rate>10</update_rate>
+        <!-- Gazebo ray-sensor +X is scan angle 0; base_link +X is forward. -->
+        <pose>0 0 0 0 0 0</pose>
+        <ray>
+          <scan>
+            <horizontal>
+              <!-- Full 360-degree field of view (LiDAR on top of the body). -->
+              <samples>360</samples>
+              <resolution>1</resolution>
+              <min_angle>-3.14159265359</min_angle>
+              <max_angle>3.14159265359</max_angle>
+            </horizontal>
+          </scan>
+          <range>
+            <min>0.12</min>
+            <max>12.0</max>
+            <resolution>0.01</resolution>
+          </range>
+          <noise type="gaussian">
+            <mean>0.0</mean>
+            <stddev>0.01</stddev>
+          </noise>
+        </ray>
+        <plugin filename="libgazebo_ros_ray_sensor.so" name="optimus_lidar_plugin">
+          <ros>
+            <remapping>~/out:=/scan</remapping>
+          </ros>
+          <output_type>sensor_msgs/LaserScan</output_type>
+          <frame_name>lidar_link</frame_name>
+        </plugin>
+      </sensor>
+    </xacro:if>
+    <xacro:if value="${sim_backend == 'gz'}">
+      <sensor name="optimus_lidar" type="gpu_lidar">
+        <!-- lidar_link is merged into base_link by Gazebo's fixed-joint
+             lumping; gz_frame_id keeps the published frame correct. -->
+        <gz_frame_id>lidar_link</gz_frame_id>
+        <topic>/scan</topic>
+        <always_on>true</always_on>
+        <visualize>true</visualize>
+        <update_rate>10</update_rate>
+        <pose>0 0 0 0 0 0</pose>
+        <lidar>
+          <scan>
+            <horizontal>
+              <samples>360</samples>
+              <resolution>1</resolution>
+              <min_angle>-3.14159265359</min_angle>
+              <max_angle>3.14159265359</max_angle>
+            </horizontal>
+          </scan>
+          <range>
+            <min>0.12</min>
+            <max>12.0</max>
+            <resolution>0.01</resolution>
+          </range>
+          <noise>
+            <type>gaussian</type>
+            <mean>0.0</mean>
+            <stddev>0.01</stddev>
+          </noise>
+        </lidar>
+      </sensor>
+    </xacro:if>
+  </gazebo>
+
+  <!-- Gazebo Sim applies default friction (mu = 1) to the fixed ball casters,
+       which then drag on the floor and stop the robot from turning. -->
+  <xacro:if value="${sim_backend == 'gz'}">
+    <xacro:macro name="frictionless_caster" params="link">
+      <gazebo reference="${link}">
+        <mu1>0.0</mu1>
+        <mu2>0.0</mu2>
+      </gazebo>
+    </xacro:macro>
+    <xacro:frictionless_caster link="front_left_caster"/>
+    <xacro:frictionless_caster link="front_right_caster"/>
+    <xacro:frictionless_caster link="rear_left_caster"/>
+    <xacro:frictionless_caster link="rear_right_caster"/>
+  </xacro:if>
+
+</robot>

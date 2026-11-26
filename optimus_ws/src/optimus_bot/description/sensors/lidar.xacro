@@ -1,0 +1,88 @@
+<?xml version="1.0"?>
+
+<robot xmlns:xacro="http://www.ros.org/wiki/xacro">
+
+  <!--
+    LiDAR frame.
+
+    RPLidar A1M8 mounted on TOP of the 600 x 400 x 300 mm body, at the front
+    end, ahead of the storage container. The container is lower than the
+    scan plane, so the full 360 degrees is used.
+
+    MEASURE: lidar_x = forward distance from the robot centre (between the
+    hub motors) to the LiDAR spin axis; lidar_z = height of the scan plane
+    above base_link (base_link is at hub-motor axle height). Current values
+    are estimates: body top at 0.30 m + ~0.04 m to the A1M8 optical plane.
+  -->
+
+  <xacro:property
+    name="lidar_x"
+    value="0.24"/>
+
+  <xacro:property
+    name="lidar_y"
+    value="0.0"/>
+
+  <xacro:property
+    name="lidar_z"
+    value="0.34"/>
+
+
+  <joint
+    name="lidar_joint"
+    type="fixed">
+
+    <parent link="base_link"/>
+    <child link="lidar_link"/>
+
+    <origin
+      xyz="${lidar_x} ${lidar_y} ${lidar_z}"
+      rpy="0 0 0"/>
+
+  </joint>
+
+
+  <link name="lidar_link">
+
+    <!-- Temporary visualization geometry -->
+    <visual>
+
+      <geometry>
+        <cylinder
+          radius="0.05"
+          length="0.05"/>
+      </geometry>
+
+      <material name="blue"/>
+
+    </visual>
+
+    <!-- Small marker showing the sensor's +X (forward / scan-zero) axis. -->
+    <visual>
+      <origin xyz="0.055 0 0" rpy="0 0 0"/>
+      <geometry>
+        <box size="0.025 0.020 0.020"/>
+      </geometry>
+      <material name="red"/>
+    </visual>
+
+
+    <!-- Temporary collision geometry -->
+    <collision>
+
+      <geometry>
+        <cylinder
+          radius="0.05"
+          length="0.05"/>
+      </geometry>
+
+    </collision>
+
+  </link>
+
+
+  <gazebo reference="lidar_link">
+    <material>Gazebo/Blue</material>
+  </gazebo>
+
+</robot>

@@ -1,0 +1,10 @@
+# Waypoints for the simulated warehouse (map frame == world frame).
+# Use with optimus_voice:  "Optimus, go to the loading bay"
+waypoints:
+  home:            {x: 0.0,  y: 0.0,  yaw_deg: 0.0,   aliases: [base, dock, start]}
+  loading_bay:     {x: 17.8, y: 5.0,  yaw_deg: 0.0,   aliases: [loading area, pickup, point 1]}
+  storage_rack:    {x: 10.0, y: 4.0,  yaw_deg: 0.0,   aliases: [rack, aisle one, point 2]}
+  aisle_two:       {x: 10.0, y: -3.5, yaw_deg: 180.0, aliases: [second aisle, point 3]}
+  packing_station: {x: 2.0,  y: -5.8, yaw_deg: -90.0, aliases: [packing, drop, point 4]}
+  east_gate:       {x: 18.0, y: 0.0,  yaw_deg: 0.0,   aliases: [gate, narrow gap, point 5]}
+patrol: [storage_rack, loading_bay, east_gate, aisle_two, packing_station, home]

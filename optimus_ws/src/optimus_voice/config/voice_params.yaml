@@ -1,0 +1,18 @@
+optimus_voice:
+  ros__parameters:
+    enable_mic: true
+    vosk_model_path: "~/vosk-model-small-en-in-0.4"   # Indian-English model
+    mic_device: -1                  # python3 -m sounddevice  -> pick an index
+    sample_rate: 16000
+    listen_window_sec: 6.0
+    require_wake_word_for_text: false
+    home_waypoint: "home"
+    map_frame: "map"
+    base_frame: "base_link"         # base_footprint if that's your Nav2 robot_base_frame
+    cmd_vel_topic: "/cmd_vel"
+    battery_topic: "/amr/battery_state"   # published by amr_system_manager
+    drive_speed: 0.15
+    tts_engine: "auto"              # auto | piper | espeak
+    piper_model: "~/piper/en_US-ryan-high.onnx"
+    voice_effects: true
+    speech_rate: 0.95

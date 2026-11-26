@@ -1,0 +1,115 @@
+# Copyright 2026 dk
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+import os
+
+from ament_index_python.packages import get_package_share_directory
+from launch import LaunchDescription
+from launch.actions import DeclareLaunchArgument
+from launch.substitutions import Command, LaunchConfiguration
+from launch_ros.actions import Node
+from launch_ros.parameter_descriptions import ParameterValue
+import yaml
+
+
+def _load_drivetrain_geometry(pkg_share):
+    """
+    Read wheel geometry from config/drivetrain.yaml.
+
+    That file is the single source of truth, so the URDF passed to
+    robot_state_publisher never disagrees with optimus_drivetrain_node's
+    kinematics/odometry.
+    """
+    drivetrain_yaml = os.path.join(
+        pkg_share, 'config', 'drivetrain.yaml'
+    )
+
+    with open(drivetrain_yaml, 'r') as f:
+        params = yaml.safe_load(f)['optimus_drivetrain_node']['ros__parameters']
+
+    return str(params['wheel_radius']), str(params['wheel_separation'])
+
+
+def generate_launch_description():
+
+    # ============================================================
+    # Package paths
+    # ============================================================
+
+    pkg_optimus_bot = get_package_share_directory(
+        'optimus_bot'
+    )
+
+    xacro_file = os.path.join(
+        pkg_optimus_bot,
+        'description',
+        'optimus.urdf.xacro'
+    )
+
+    wheel_radius, wheel_separation = _load_drivetrain_geometry(
+        pkg_optimus_bot
+    )
+
+    # ============================================================
+    # Launch arguments
+    # ============================================================
+
+    use_sim_arg = DeclareLaunchArgument(
+        'use_sim',
+        default_value='false',
+        description='Use simulation robot description'
+    )
+
+    use_sim = LaunchConfiguration('use_sim')
+
+    # ============================================================
+    # Robot description
+    # ============================================================
+
+    robot_description_content = Command([
+        'xacro ',
+        xacro_file,
+        ' use_sim:=',
+        use_sim,
+        ' wheel_radius:=',
+        wheel_radius,
+        ' wheel_separation:=',
+        wheel_separation
+    ])
+
+    robot_description = ParameterValue(
+        robot_description_content,
+        value_type=str
+    )
+
+    # ============================================================
+    # Robot State Publisher
+    # ============================================================
+
+    robot_state_publisher = Node(
+        package='robot_state_publisher',
+        executable='robot_state_publisher',
+        name='robot_state_publisher',
+        output='screen',
+        parameters=[
+            {
+                'robot_description': robot_description
+            }
+        ]
+    )
+
+    return LaunchDescription([
+        use_sim_arg,
+        robot_state_publisher
+    ])

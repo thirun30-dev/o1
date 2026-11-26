@@ -1,0 +1,27 @@
+# Waypoints in the map frame. Replace these with real coordinates:
+#   drive the robot there and say "Optimus, save this location as <name>",
+#   or click "2D Goal Pose" in RViz and copy x/y from /goal_pose.
+waypoints:
+  home:
+    x: 0.0
+    y: 0.0
+    yaw_deg: 0.0
+    aliases: [base, dock, start]
+  loading_bay:
+    x: 3.5
+    y: 1.2
+    yaw_deg: 90.0
+    aliases: [loading area, pickup, point 1]
+  storage_rack:
+    x: 5.0
+    y: -2.0
+    yaw_deg: 180.0
+    aliases: [rack, shelf, point 2]
+  packing_station:
+    x: 1.5
+    y: -3.0
+    yaw_deg: -90.0
+    aliases: [packing, drop, point 3]
+
+# Order used by "Optimus, start auto navigation" / "start patrol"
+patrol: [loading_bay, storage_rack, packing_station, home]
