@@ -63,8 +63,11 @@ class ROSConnectionManager {
       operationResult: [],
       voiceResponse: [],
       voiceState: [],
-      voiceTranscript: []
+      voiceTranscript: [],
+      cameraFeeds: []
     };
+    // Last /dashboard/camera/feeds listing, for components mounted later.
+    this.cameraFeeds = [];
 
     this.topics = {};
     this.manualDisconnect = false;
@@ -401,6 +404,26 @@ class ROSConnectionManager {
     subscribeString('voiceState', '/optimus/voice/state', 'voiceState');
     subscribeString('voiceTranscript', '/optimus/voice/transcript', 'voiceTranscript');
 
+    // 14. Dashboard camera feeds (camera_stream_node). Only the listing is
+    // subscribed here; the images themselves are subscribed on demand by
+    // subscribeCamera() so nothing is streamed while no one is watching.
+    this.topics.cameraFeeds = new ROSLIB.Topic({
+      ros: this.ros,
+      name: '/dashboard/camera/feeds',
+      messageType: 'std_msgs/String',
+      throttle_rate: 2000,
+      queue_length: 1
+    });
+    this.topics.cameraFeeds.subscribe((msg) => {
+      try {
+        const parsed = JSON.parse(msg.data);
+        this.cameraFeeds = Array.isArray(parsed) ? parsed : [];
+        this._emit('cameraFeeds', this.cameraFeeds);
+      } catch (e) {
+        console.warn('Failed to parse camera feeds', e);
+      }
+    });
+
     // Publishers
     this.topics.voiceCommand = new ROSLIB.Topic({
       ros: this.ros,
@@ -446,6 +469,32 @@ class ROSConnectionManager {
       messageType: 'geometry_msgs/PoseWithCovarianceStamped'
     });
     this.topics.initialPose.advertise();
+  }
+
+  /**
+   * Subscribe to one dashboard camera feed (JPEG over rosbridge).
+   * cb receives a data: URL per frame. Returns an unsubscribe function.
+   */
+  subscribeCamera(feedName, cb, throttleMs = 100) {
+    if (!this.ros || !this.connected) return () => {};
+    const topic = new ROSLIB.Topic({
+      ros: this.ros,
+      name: `/dashboard/camera/${feedName}/compressed`,
+      messageType: 'sensor_msgs/CompressedImage',
+      throttle_rate: throttleMs,
+      queue_length: 1
+    });
+    const handler = (msg) => {
+      if (!msg || !msg.data) return;
+      const type = (msg.format || '').includes('png') ? 'png' : 'jpeg';
+      cb(`data:image/${type};base64,${msg.data}`);
+    };
+    topic.subscribe(handler);
+    return () => {
+      try {
+        topic.unsubscribe(handler);
+      } catch (_) {}
+    };
   }
 
   // Event Subscription

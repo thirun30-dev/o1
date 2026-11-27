@@ -1,0 +1,75 @@
+# Camera obstacle avoidance configuration.
+#
+# Pick a profile with `camera:=<profile>` on bringup.launch.py or
+# camera.launch.py (`camera:=none` disables the camera):
+#
+#   laptop - the robot laptop's built-in webcam (OpenCV / V4L2). Use this now.
+#   picam  - Raspberry Pi camera module through libcamera (camera_ros).
+#
+# Both publish /camera/image_raw + /camera/camera_info. camera_obstacle_node
+# turns the image into a LaserScan on /camera/scan, which Nav2's costmaps use
+# as a second obstacle source next to the LiDAR (config/nav2.yaml,
+# camera_layer). It mainly catches LOW obstacles under the LiDAR scan plane
+# (pallets, boxes, cables, feet) - see docs/CAMERA.md.
+#
+# MEASURE the mount for the profile you use. The obstacle distances come
+# straight from this geometry, so wrong values = obstacles placed at the wrong
+# distance in the costmap:
+#   x, y           camera lens position from the robot centre (between the hub
+#                  motors), metres, +x forward, +y left
+#   z_above_floor  lens height above the FLOOR, metres
+#   pitch_deg      downward tilt of the camera (0 = looking at the horizon,
+#                  positive = tilted down towards the floor)
+#   yaw_deg        rotation left (+) / right (-) of straight ahead
+#   hfov_deg       horizontal field of view, used when the driver publishes no
+#                  calibrated camera_info
+
+profiles:
+  laptop:
+    driver: opencv
+    device: /dev/video0         # /dev/video2 on this laptop is the IR camera
+    width: 640
+    height: 480
+    fps: 15
+    hfov_deg: 60.0              # typical laptop webcam; adjust for yours
+    rotate_180: false
+    mount:
+      x: 0.10                   # ESTIMATE - laptop on the top deck
+      y: 0.0
+      z_above_floor: 0.60       # ESTIMATE - body top + screen bezel height
+      pitch_deg: 20.0           # tilt the lid forward so the floor is visible
+      yaw_deg: 0.0
+
+  picam:
+    driver: libcamera
+    camera_index: 0
+    width: 640
+    height: 480
+    hfov_deg: 62.2              # Camera Module v2; Module 3 = 66, Module 3 Wide = 102
+    rotate_180: false           # true if the ribbon cable forces it upside down
+    mount:
+      x: 0.30                   # ESTIMATE - front face of the 600 mm body
+      y: 0.0
+      z_above_floor: 0.25       # ESTIMATE
+      pitch_deg: 25.0
+      yaw_deg: 0.0
+
+# Shared detector parameters (camera_obstacle_node).
+camera_obstacle_node:
+  ros__parameters:
+    process_width: 160          # image is downscaled to this width first
+    max_rate_hz: 10.0
+    max_range: 2.0              # metres; beyond this the camera reports free
+    num_bins: 64                # LaserScan rays across the camera's view
+    min_run_px: 3               # vertical obstacle pixels needed to count
+    bottom_crop_ratio: 0.0      # ignore this fraction of the image bottom
+                                # (e.g. if the robot's own body is visible)
+    # Floor reference: a patch at the bottom-centre of the image is assumed to
+    # be floor and its colour is learned. Start with the robot on clear floor.
+    ref_height_ratio: 0.15
+    ref_width_ratio: 0.5
+    obstacle_threshold: 0.06    # colour bins rarer than this on the floor = obstacle
+    saturation_min: 40          # below this saturation, hue is ignored (grey floors)
+    learn_rate: 0.05            # how fast the floor model follows lighting changes
+    ref_mismatch_ratio: 0.35    # freeze learning when this much of the patch is "not floor"
+    relearn_after_s: 3.0        # ...and relearn if that lasts this long (new floor type)

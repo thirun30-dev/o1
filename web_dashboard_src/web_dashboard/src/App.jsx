@@ -10,6 +10,7 @@ import MapViewer from './components/MapViewer';
 import LocationManager from './components/LocationManager';
 import MapManager from './components/MapManager';
 import Teleop from './components/Teleop';
+import CameraView from './components/CameraView';
 import WarehouseSopModal from './components/WarehouseSopModal';
 import VoiceCommandModal from './components/VoiceCommandModal';
 
@@ -20,7 +21,7 @@ import DiagnosticsTemplate from './components/templates/DiagnosticsTemplate';
 
 import { 
   Gamepad2, MapPin, Layers, Activity, Sparkles, CheckCircle2, ChevronRight, Cpu,
-  LayoutDashboard, Navigation as NavIcon, Radio, AlertOctagon, ShieldAlert, Terminal, Mic
+  LayoutDashboard, Navigation as NavIcon, Radio, AlertOctagon, ShieldAlert, Terminal, Mic, Camera
 } from 'lucide-react';
 
 export default function App() {
@@ -92,7 +93,7 @@ export default function App() {
   // Active top-level view: operator cockpit, missions, or diagnostics.
   const [activeTemplate, setActiveTemplate] = useState('COCKPIT');
 
-  // Cockpit Drawer Tab: 'TELEOP' | 'LOCATIONS' | 'MAPS' | 'DIAGNOSTICS'
+  // Cockpit Drawer Tab: 'TELEOP' | 'CAMERA' | 'LOCATIONS' | 'MAPS' | 'DIAGNOSTICS'
   const [controlTab, setControlTab] = useState('TELEOP');
 
   const handleEmergencyStop = () => {
@@ -284,6 +285,18 @@ export default function App() {
                   </button>
 
                   <button
+                    onClick={() => setControlTab('CAMERA')}
+                    className={`flex-1 py-2 px-2 rounded-xl text-[11px] sm:text-xs font-mono font-extrabold flex items-center justify-center gap-1.5 transition-all cursor-pointer whitespace-nowrap ${
+                      controlTab === 'CAMERA'
+                        ? 'bg-gradient-to-r from-orange-500 to-orange-600 text-white shadow-xs font-black'
+                        : 'text-slate-400 hover:text-white hover:bg-slate-800/80'
+                    }`}
+                  >
+                    <Camera className="w-3.5 h-3.5 shrink-0" />
+                    <span>CAMERA</span>
+                  </button>
+
+                  <button
                     onClick={() => setControlTab('LOCATIONS')}
                     className={`flex-1 py-2 px-2 rounded-xl text-[11px] sm:text-xs font-mono font-extrabold flex items-center justify-center gap-1.5 transition-all cursor-pointer whitespace-nowrap ${
                       controlTab === 'LOCATIONS'
@@ -332,6 +345,10 @@ export default function App() {
                       laserScan={laserScan}
                       robotPose={robotPose}
                     />
+                  )}
+
+                  {controlTab === 'CAMERA' && (
+                    <CameraView connected={connected} />
                   )}
 
                   {controlTab === 'LOCATIONS' && (

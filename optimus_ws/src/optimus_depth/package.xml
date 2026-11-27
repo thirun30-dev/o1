@@ -1,0 +1,27 @@
+<?xml version="1.0"?>
+<?xml-model href="http://download.ros.org/schema/package_format3.xsd" schematypens="http://www.w3.org/2001/XMLSchema"?>
+<package format="3">
+  <name>optimus_depth</name>
+  <version>0.1.0</version>
+  <description>Depth camera support for the Optimus AMR: driver profiles (Intel RealSense, Orbbec), mount TF and a depth-to-obstacle point cloud node for Nav2 (low obstacles, overhangs and drop-offs).</description>
+  <maintainer email="letsmaildilip@gmail.com">dk</maintainer>
+  <license>Apache-2.0</license>
+
+  <exec_depend>rclpy</exec_depend>
+  <exec_depend>sensor_msgs</exec_depend>
+  <exec_depend>tf2_ros</exec_depend>
+  <exec_depend>python3-numpy</exec_depend>
+  <exec_depend>python3-yaml</exec_depend>
+  <exec_depend>launch</exec_depend>
+  <exec_depend>launch_ros</exec_depend>
+  <exec_depend>ament_index_python</exec_depend>
+  <!-- Default driver (profile "realsense"). The Orbbec profile needs
+       ros-$ROS_DISTRO-orbbec-camera, installed by hand. -->
+  <exec_depend>realsense2_camera</exec_depend>
+
+  <test_depend>python3-pytest</test_depend>
+
+  <export>
+    <build_type>ament_python</build_type>
+  </export>
+</package>

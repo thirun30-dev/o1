@@ -132,6 +132,16 @@ ros2 launch optimus_bot lidar.launch.py   # logs "Starting RPLIDAR on ..."; the 
 ros2 topic hz /scan                       # about 10 Hz
 ```
 
+### d. Camera (Pi camera module)
+
+```bash
+ros2 launch optimus_bot camera.launch.py camera:=picam
+ros2 topic hz /camera/scan                # about 5-10 Hz
+```
+
+Measure the mount into the `picam` profile of `config/camera.yaml` first and
+run `bringup` / `optimus` with `camera:=picam` - see [CAMERA.md](CAMERA.md).
+
 ---
 
 ## 5. Normal operation

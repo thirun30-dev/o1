@@ -96,6 +96,9 @@ install(
     scripts/system_manager_node.py
     scripts/location_manager_node.py
     scripts/front_scan_filter.py
+    scripts/camera_publisher_node.py
+    scripts/camera_obstacle_node.py
+    scripts/camera_stream_node.py
   DESTINATION
     lib/${PROJECT_NAME}
 )
@@ -113,6 +116,8 @@ if(BUILD_TESTING)
 
   ament_add_pytest_test(test_urdf test/test_urdf.py)
   ament_add_pytest_test(test_launch test/test_launch.py)
+  ament_add_pytest_test(test_camera_obstacle test/test_camera_obstacle.py)
+  ament_add_pytest_test(test_camera_stream test/test_camera_stream.py)
 
 endif()
 

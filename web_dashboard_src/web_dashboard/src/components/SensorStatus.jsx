@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import {
   Activity, CheckCircle2, AlertTriangle, XCircle, Radio, Disc, Boxes,
-  Compass, Layers, Map, Navigation
+  Compass, Layers, Map, Navigation, Camera, ScanLine
 } from 'lucide-react';
 import { batteryView } from '../utils/battery';
 
@@ -33,6 +33,8 @@ export default function SensorStatus({
   const nodes = [
     { key: 'lidar', label: 'RPLiDAR A1M8', topic: '/scan', category: 'HARDWARE', icon: Radio, detail: '360° • top of body, front end' },
     { key: 'controller', label: 'ZLAC8015D Drive', topic: '/joint_states', category: 'HARDWARE', icon: Boxes, detail: 'RS485 Modbus RTU • 2 × ZLLG50ASM200 hub motors' },
+    { key: 'camera', label: 'Obstacle Camera', topic: '/camera/scan', category: 'HARDWARE', icon: Camera, detail: 'Laptop webcam / Pi camera • low obstacles' },
+    { key: 'depth_camera', label: 'Depth Camera', topic: '/depth_camera/obstacles', category: 'HARDWARE', icon: ScanLine, detail: 'RealSense / Orbbec • obstacles & drop-offs' },
     { key: 'odometry', label: 'Wheel Odometry', topic: '/odom', category: 'HARDWARE', icon: Disc, detail: 'optimus_drivetrain_node' },
     { key: 'tf', label: 'TF2 Frames', topic: '/tf & /tf_static', category: 'HARDWARE', icon: Compass, detail: 'map ➔ odom ➔ base_link ➔ lidar_link' },
     { key: 'nav2', label: 'Nav2 Controller', topic: '/plan & /cmd_vel', category: 'NAV', icon: Navigation, detail: 'Costmaps & path follower' },

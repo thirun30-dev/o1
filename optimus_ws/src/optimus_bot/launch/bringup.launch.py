@@ -17,12 +17,43 @@ from pathlib import Path
 
 from ament_index_python.packages import get_package_share_directory
 from launch import LaunchDescription
-from launch.actions import DeclareLaunchArgument, GroupAction, IncludeLaunchDescription
+from launch.actions import (
+    DeclareLaunchArgument, GroupAction, IncludeLaunchDescription, OpaqueFunction
+)
 from launch.conditions import IfCondition, UnlessCondition
 from launch.launch_description_sources import PythonLaunchDescriptionSource
-from launch.substitutions import LaunchConfiguration, PathJoinSubstitution
+from launch.substitutions import LaunchConfiguration, PathJoinSubstitution, PythonExpression
 from launch_ros.actions import Node
+import yaml
 from launch_ros.substitutions import FindPackageShare
+
+
+def _camera_stream(context):
+    """
+    Dashboard camera feeds (camera_stream_node), started with rosbridge.
+
+    The depth topics depend on the depth camera driver, so they are read from
+    the selected optimus_depth profile.
+    """
+    if LaunchConfiguration('use_rosbridge').perform(context).lower() != 'true':
+        return []
+    feeds = ['front=/camera/image_raw', 'obstacles=/camera/obstacle_debug']
+    depth_profile = LaunchConfiguration('depth_camera').perform(context).strip()
+    if depth_profile not in ('', 'none', 'false', 'off'):
+        try:
+            share = get_package_share_directory('optimus_depth')
+            with open(os.path.join(share, 'config', 'depth_camera.yaml')) as f:
+                prof = yaml.safe_load(f)['profiles'][depth_profile]
+            feeds += [f"depth_color={prof['color_topic']}", f"depth={prof['depth_topic']}"]
+        except Exception:  # unknown profile: depth_camera.launch.py reports it
+            pass
+    return [Node(
+        package='optimus_bot',
+        executable='camera_stream_node.py',
+        name='camera_stream_node',
+        output='screen',
+        parameters=[{'feeds': feeds}],
+    )]
 
 
 def generate_launch_description():
@@ -81,6 +112,18 @@ def generate_launch_description():
     odom_frame_arg = DeclareLaunchArgument('odom_frame', default_value='odom')
     base_frame_arg = DeclareLaunchArgument('base_frame', default_value='base_link')
     lidar_frame_arg = DeclareLaunchArgument('lidar_frame', default_value='lidar_link')
+    depth_camera_arg = DeclareLaunchArgument(
+        'depth_camera',
+        default_value='none',
+        description=('Depth camera profile from optimus_depth/config/depth_camera.yaml: '
+                     'realsense, orbbec or none')
+    )
+    camera_arg = DeclareLaunchArgument(
+        'camera',
+        default_value='laptop',
+        description=('Obstacle camera profile from config/camera.yaml: laptop (robot '
+                     'laptop webcam), picam (Raspberry Pi camera) or none')
+    )
 
     simulation = LaunchConfiguration('simulation')
     use_sim_time = LaunchConfiguration('use_sim_time')
@@ -118,6 +161,18 @@ def generate_launch_description():
                 PythonLaunchDescriptionSource(
                     os.path.join(pkg_optimus, 'launch', 'lidar.launch.py')),
                 launch_arguments={'lidar_frame': lidar_frame}.items()
+            ),
+            IncludeLaunchDescription(
+                PythonLaunchDescriptionSource(
+                    os.path.join(pkg_optimus, 'launch', 'camera.launch.py')),
+                launch_arguments={'camera': LaunchConfiguration('camera')}.items()
+            ),
+            IncludeLaunchDescription(
+                PythonLaunchDescriptionSource(PathJoinSubstitution(
+                    [FindPackageShare('optimus_depth'), 'launch', 'depth_camera.launch.py'])),
+                launch_arguments={'depth_camera': LaunchConfiguration('depth_camera')}.items(),
+                condition=UnlessCondition(PythonExpression(
+                    ["'", LaunchConfiguration('depth_camera'), "' in ('', 'none', 'false', 'off')"]))
             )
         ]
     )
@@ -187,10 +242,13 @@ def generate_launch_description():
         odom_frame_arg,
         base_frame_arg,
         lidar_frame_arg,
+        camera_arg,
+        depth_camera_arg,
         sim_launch,
         real_robot_launch,
         rosbridge_launch,
         system_mgr_node,
         location_mgr_node,
-        voice_launch
+        voice_launch,
+        OpaqueFunction(function=_camera_stream)
     ])

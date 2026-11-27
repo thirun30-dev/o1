@@ -53,7 +53,7 @@ connects with `wss://` and rosbridge must run with TLS:
 
 | Page | What it shows |
 |---|---|
-| **Cockpit** | Autonomy modes (READY / MAPPING / AMCL / NAV2), pose and velocity, map with scan, costmap, path and saved locations, and a tabbed panel: **Drive** (joystick, D-pad, WASD), **POIs**, **Maps**, **Health** |
+| **Cockpit** | Autonomy modes (READY / MAPPING / AMCL / NAV2), pose and velocity, map with scan, costmap, path and saved locations, and a tabbed panel: **Drive** (joystick, D-pad, WASD), **Camera** (live front / obstacle / depth camera view, see [CAMERA.md](CAMERA.md)), **POIs**, **Maps**, **Health** |
 | **POI Dispatcher** | Build a route of saved locations with dwell times; run once or in a loop |
 | **Diagnostics** | Robot specification (motors, RS485, LiDAR, drivetrain), live 360° LiDAR clearance by sector, wheel RPM from odometry, the live ROS graph (which robot nodes are running) and a **self-test** |
 | **System Logs** | Session statistics (distance, goals, peak speed, e-stops) and a live event log of mode changes, goals, e-stops and health changes |

@@ -58,6 +58,7 @@ An industrial Autonomous Mobile Robot (AMR) system for warehouse logistics built
 | Body | 600 × 400 × 300 mm box, 4 corner casters, 2 ZLTECH hub motors in the middle, storage container on the top deck |
 | Drive | 2 × ZLTECH ZLLG50ASM200 V2.0 hub motors (131 mm wheels, 265 mm apart), ZLAC8015D driver, RS485 (USB adapter, 115200 baud) → robot computer |
 | LiDAR | RPLidar A1M8 on top of the body at the front end, full 360° scan (container sits below the scan plane) |
+| Camera | Forward obstacle camera for low obstacles under the LiDAR plane: robot laptop webcam now (`camera:=laptop`), Raspberry Pi camera later (`camera:=picam`); optional depth camera (`depth_camera:=realsense` / `orbbec`); live view in the dashboard - see [Camera guide](docs/CAMERA.md) |
 | Odometry | ZLAC8015D wheel speed feedback, integrated by `optimus_drivetrain_node` |
 | Battery | 25.6 V nominal, 15 Ah, BMS 20 A |
 | Safety | Hardware stop button (cuts motor power); software E-STOP and 0.5 s command timeout |
@@ -66,7 +67,7 @@ An industrial Autonomous Mobile Robot (AMR) system for warehouse logistics built
 
 **LiDAR field of view:** `/scan` carries the full 360° by default. If anything on the top deck ever blocks the rear, crop it with `lidar_fov_deg` (e.g. `ros2 launch optimus_bot lidar.launch.py lidar_fov_deg:=270`) or the `field_of_view_deg` parameter of `front_scan_filter`. Measure and update `lidar_x` / `lidar_z` in `description/sensors/lidar.xacro` and the container size in `description/base/base.xacro` — current values are estimates.
 
-**Planned upgrades:** ESP32-S2 sensor hub (IMU, rear ToF sensors, battery monitor, E-stop sense) and a depth camera. Until the battery monitor is added, the battery shown on the dashboard is simulated.
+**Planned upgrades:** ESP32-S2 sensor hub (IMU, rear ToF sensors, battery monitor, E-stop sense). Cameras, including a depth camera, are already supported - see [docs/CAMERA.md](docs/CAMERA.md). Until the battery monitor is added, the battery shown on the dashboard is simulated.
 
 ---
 
@@ -83,6 +84,7 @@ An industrial Autonomous Mobile Robot (AMR) system for warehouse logistics built
 │   │   ├── src/                 # drivetrain_node.cpp (kinematics, odometry, TF)
 │   │   └── worlds/, tools/      # simulation worlds and the Classic -> Gazebo Sim world converter
 │   ├── zlac_drive/              # ZLAC8015D Modbus ros2_control hardware driver
+│   ├── optimus_depth/           # Depth camera (RealSense / Orbbec) obstacles + drop-offs
 │   ├── optimus_voice/           # Voice commands ("Optimus, go to ...")
 │   └── optimus_sim/             # Gazebo Sim warehouse + obstacle tests (Jazzy only)
 ├── tools/                       # Hardware test scripts, systemd service
@@ -149,6 +151,7 @@ Detailed guides are available in the [`docs/`](docs/) directory:
 - [Architecture Guide](docs/ARCHITECTURE.md) — System components, ROS 2 topics, services, actions, and TF tree.
 - [Setup & Installation](docs/SETUP.md) — Supported platforms, dependencies, build and tests.
 - [Raspberry Pi Guide](docs/RASPBERRY_PI.md) — Wiring, Pi setup, first power-up, autostart.
+- [Cameras](docs/CAMERA.md) — Webcam / Pi camera / depth camera obstacle detection for Nav2 and the dashboard camera view.
 - [Simulation Guide](docs/SIMULATION.md) — Robot simulation (Gazebo Classic / Gazebo Sim) and the warehouse simulation.
 - [Mapping Guide](docs/MAPPING.md) — SLAM Toolbox mapping, pre-flight checks, and map saving.
 - [Localization Guide](docs/LOCALIZATION.md) — Map Server, AMCL, and pose initialization.

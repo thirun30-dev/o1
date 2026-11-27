@@ -40,7 +40,7 @@ from rclpy.executors import ExternalShutdownException
 from rclpy.node import Node
 from rclpy.qos import DurabilityPolicy, QoSProfile
 from rclpy.time import Time
-from sensor_msgs.msg import BatteryState, JointState, LaserScan
+from sensor_msgs.msg import BatteryState, JointState, LaserScan, PointCloud2
 from slam_toolbox.srv import DeserializePoseGraph, SerializePoseGraph
 from std_msgs.msg import String
 from std_srvs.srv import Trigger
@@ -413,6 +413,8 @@ class AMRSystemManager(Node):
 
         # Telemetry tracking
         self.last_scan_time = 0.0
+        self.last_camera_time = 0.0
+        self.last_depth_time = 0.0
         self.last_odom_time = 0.0
         self.last_joint_states_time = 0.0
         self.last_map_time = 0.0
@@ -427,6 +429,11 @@ class AMRSystemManager(Node):
         self.sub_scan = self.create_subscription(
             LaserScan, '/scan', self._scan_cb, rclpy.qos.qos_profile_sensor_data)
         self.sub_odom = self.create_subscription(Odometry, '/odom', self._odom_cb, 10)
+        # Optional obstacle cameras (camera:=..., depth_camera:=...).
+        self.sub_camera = self.create_subscription(
+            LaserScan, '/camera/scan', self._camera_cb, 5)
+        self.sub_depth = self.create_subscription(
+            PointCloud2, '/depth_camera/obstacles', self._depth_cb, 5)
         self.sub_joints = self.create_subscription(JointState, '/joint_states', self._joint_cb, 10)
         self.sub_map = self.create_subscription(
             OccupancyGrid, '/map', self._map_cb, rclpy.qos.qos_profile_sensor_data)
@@ -488,6 +495,12 @@ class AMRSystemManager(Node):
             self.state_machine.transition_to(AMRState.BOOTING)
             self.state_machine.transition_to(AMRState.READY)
             self.get_logger().info('System auto-transitioned to READY')
+
+    def _camera_cb(self, _msg):
+        self.last_camera_time = time.time()
+
+    def _depth_cb(self, _msg):
+        self.last_depth_time = time.time()
 
     def _scan_cb(self, msg: LaserScan):
         self.last_scan_time = time.time()
@@ -726,6 +739,22 @@ class AMRSystemManager(Node):
                         else f'Delayed ({lidar_dt:.1f}s ago)'),
             'last_seen_sec': round(lidar_dt, 2)
         }
+
+        # Obstacle cameras are optional: never seen = not fitted / disabled,
+        # which is not a fault. Once seen, a stall is a warning.
+        for key, stamp, label in (('camera', self.last_camera_time, 'Camera obstacle scan'),
+                                  ('depth_camera', self.last_depth_time, 'Depth obstacles')):
+            dt = age(stamp)
+            if stamp == 0:
+                components[key] = {'status': ok, 'running': False,
+                                   'message': 'Not enabled', 'last_seen_sec': -1}
+            else:
+                components[key] = {
+                    'status': ok if dt < 2.0 else warn,
+                    'running': dt < 2.0,
+                    'message': f'{label} publishing' if dt < 2.0 else f'Stalled ({dt:.1f}s ago)',
+                    'last_seen_sec': round(dt, 2)
+                }
 
         # Odometry
         odom_dt = age(self.last_odom_time)

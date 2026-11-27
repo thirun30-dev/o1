@@ -33,6 +33,12 @@
   <exec_depend>teleop_twist_keyboard</exec_depend>
   <exec_depend>zlac_drive</exec_depend>
   <exec_depend>rplidar_ros</exec_depend>
+  <!-- Obstacle camera: OpenCV for the laptop/USB webcam, camera_ros (libcamera) for the Pi camera. -->
+  <exec_depend>python3-opencv</exec_depend>
+  <exec_depend>python3-numpy</exec_depend>
+  <exec_depend>camera_ros</exec_depend>
+  <!-- Depth camera driver profiles + depth obstacle node (depth_camera:=...). -->
+  <exec_depend>optimus_depth</exec_depend>
   <exec_depend>nav2_bringup</exec_depend>
   <exec_depend>nav2_controller</exec_depend>
   <exec_depend>nav2_planner</exec_depend>
