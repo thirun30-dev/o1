@@ -12,7 +12,7 @@
 
 ### Workspace & Core Setup
 - **ROS 2 Distribution**: ROS 2 Humble (`/opt/ros/humble`)
-- **Workspace**: `/home/dk/optimus_ws`
+- **Workspace**: `~/optimus_ws`
 - **Existing Packages**:
   - `optimus_bot`: Primary robot integration package
   - `zlac_drive`: Real hardware interface for ZLAC8015D dual-channel brushless motor driver
@@ -100,11 +100,11 @@
 - Updated `launch/localization.launch.py`, `launch/slam.launch.py`, `launch/navigation.launch.py` to ensure consistent `use_sim_time` propagation.
 
 ### Maps and Locations Directories
-- `/home/dk/optimus_ws/maps/`: Controlled directory for saved occupancy maps (`.yaml`, `.pgm`).
-- `/home/dk/optimus_ws/locations/`: YAML database for warehouse shelf and station coordinates.
+- `~/optimus_data/maps/`: Controlled directory for saved occupancy maps (`.yaml`, `.pgm`).
+- `~/optimus_data/locations/`: YAML database for warehouse shelf and station coordinates.
 
 ### Web Dashboard
-- `/home/dk/web_dashboard/`: Standalone modern React application
+- `web_dashboard_src/web_dashboard/`: Standalone modern React application
   - `src/ros/`: ROS WebSocket client, topic subscribers, service callers, action clients.
   - `src/components/`: Header, RobotStatus, SensorStatus, ModeSelector, MapViewer (canvas occupancy grid + laser + pose + goal + locations), LocationManager, MapManager, Teleop, EmergencyStop.
   - Responsive, industrial warehouse UI design.

@@ -43,7 +43,6 @@ add_library(zlac_drive SHARED
   src/driver/motor.cpp
   src/driver/zlac_drive_driver.cpp
   src/hardware/zlac_system_hardware.cpp
-  src/diagnostics/driver_diagnostics.cpp
 )
 
 target_include_directories(zlac_drive
