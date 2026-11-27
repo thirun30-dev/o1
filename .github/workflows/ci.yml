@@ -1,0 +1,53 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  ros:
+    name: ROS 2 Humble build and test
+    runs-on: ubuntu-22.04
+    container: ros:humble-ros-base
+    defaults:
+      run:
+        shell: bash
+        working-directory: optimus_ws
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install dependencies
+        run: |
+          # optimus_sim needs Gazebo Sim, which is Jazzy-only
+          touch src/optimus_sim/COLCON_IGNORE
+          apt-get update
+          rosdep update --rosdistro humble
+          rosdep install --from-paths src --ignore-src -y -r --rosdistro humble
+
+      - name: Build
+        run: |
+          source /opt/ros/humble/setup.bash
+          colcon build --event-handlers console_cohesion+
+
+      - name: Test
+        run: |
+          source /opt/ros/humble/setup.bash
+          colcon test --event-handlers console_cohesion+
+          colcon test-result --verbose
+
+  dashboard:
+    name: Web dashboard build
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: web_dashboard_src/web_dashboard
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+          cache-dependency-path: web_dashboard_src/web_dashboard/package-lock.json
+      - run: npm ci
+      - run: npm run build
