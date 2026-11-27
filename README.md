@@ -1,6 +1,6 @@
 # Optimus AMR
 
-**A low-cost ROS 2 autonomous mobile robot for warehouse transport: SLAM mapping, Nav2 navigation, a custom ZLAC8015D motor driver, a React web dashboard, and offline voice control.**
+**A low-cost ROS 2 autonomous mobile robot for warehouse transport: SLAM mapping, Nav2 navigation, camera and depth-camera obstacle avoidance, a custom ZLAC8015D motor driver, a React web dashboard, and offline voice control.**
 
 ![ROS 2](https://img.shields.io/badge/ROS%202-Humble%20%7C%20Jazzy-22314E?logo=ros)
 ![C++](https://img.shields.io/badge/C%2B%2B-17-00599C?logo=cplusplus)
@@ -8,6 +8,7 @@
 ![React](https://img.shields.io/badge/React-18-61DAFB?logo=react&logoColor=black)
 ![Vite](https://img.shields.io/badge/Vite-5-646CFF?logo=vite&logoColor=white)
 ![License](https://img.shields.io/badge/License-Apache%202.0-blue)
+[![CI](https://github.com/thirun30-dev/o1/actions/workflows/ci.yml/badge.svg)](https://github.com/thirun30-dev/o1/actions/workflows/ci.yml)
 
 > Formerly known as **BumbleB**.
 
@@ -22,6 +23,7 @@ The project covers the full stack:
 - **Hardware driver**: a from-scratch ros2_control plugin that speaks Modbus RTU over RS-485 to the ZLAC8015D dual-motor driver
 - **Robot software**: kinematics, odometry, TF, a system state machine, process supervision, map and location management
 - **Autonomy**: SLAM Toolbox for mapping, AMCL for localization, Nav2 for path planning and obstacle avoidance
+- **Perception**: a monocular camera obstacle detector and depth-camera obstacle / drop-off detection that catch what the LiDAR plane misses
 - **Operator interface**: a React dashboard over rosbridge WebSockets, plus an offline voice assistant
 - **Simulation**: Gazebo Classic and a Gazebo Sim warehouse world with obstacle and traffic tests
 
@@ -34,9 +36,11 @@ The project covers the full stack:
 | Navigation | Nav2 click-to-navigate, or go to saved named locations |
 | State machine | `OFF → BOOTING → READY → MAPPING / LOCALIZATION / NAVIGATION → ERROR / EMERGENCY_STOP`, with validated transitions |
 | Safety | Hardware stop button (cuts motor power), software E-stop, 0.5 s `cmd_vel` timeout, velocity limits clamped to the motor's 350 RPM peak |
+| Camera obstacles | A forward RGB camera (laptop webcam now, Pi camera later) detects low obstacles the LiDAR scans over and feeds them to Nav2 as a second obstacle source |
+| Depth camera | Optional RealSense or Orbbec depth camera: marks low obstacles (pallets, forks, shelf edges) and drop-offs such as dock edges in a Nav2 costmap layer |
 | Teleoperation | On-screen joystick with an inching mode for precise docking |
 | Voice | Offline wake-word commands (Vosk, Indian-English model) and spoken replies (Piper / espeak) |
-| Diagnostics | Live sensor and robot health, dashboard self-test, step-by-step SOP guide |
+| Diagnostics | Live sensor and robot health, live camera and depth feeds, dashboard self-test, step-by-step SOP guide |
 | Remote access | wss:// support, so the dashboard also works from an https deployment (such as Vercel) |
 
 ---
@@ -82,12 +86,14 @@ The project covers the full stack:
 | Drive | 2 × ZLTECH ZLLG50ASM200 V2.0 hub motors (131 mm wheels, 265 mm apart) |
 | Motor driver | ZLAC8015D, RS-485 via a USB adapter at 115200 baud |
 | LiDAR | RPLidar A1M8, mounted on top at the front, full 360° scan |
+| Camera | Forward RGB camera: the robot laptop's webcam (`camera:=laptop`) or a Raspberry Pi camera module (`camera:=picam`) |
+| Depth camera (optional) | Intel RealSense D435 / D435i / D455 or Orbbec Astra / Gemini (`depth_camera:=realsense` / `orbbec`) |
 | Odometry | Wheel-speed feedback from the ZLAC8015D |
 | Battery | 25.6 V nominal, 15 Ah, 20 A BMS |
 | Computer | Ubuntu 22.04 laptop (ROS 2 Humble) or Raspberry Pi 4/5 |
 | Speed limits | 0.5 m/s linear, 1.0 rad/s angular (software) |
 
-**Planned:** an ESP32-S2 sensor hub (IMU, rear ToF sensors, battery monitor, E-stop sense) and a depth camera. Until the battery monitor is fitted, the battery level on the dashboard is **simulated**.
+**Planned:** an ESP32-S2 sensor hub (IMU, rear ToF sensors, battery monitor, E-stop sense). Until the battery monitor is fitted, the battery level on the dashboard is **simulated**.
 
 ---
 
@@ -97,25 +103,25 @@ The project covers the full stack:
 .
 ├── optimus_ws/                     # ROS 2 workspace
 │   ├── src/
-│   │   ├── optimus_bot/            # URDF, launch, config, drivetrain node, managers
+│   │   ├── optimus_bot/            # URDF, launch, config, drivetrain node, managers, camera nodes
 │   │   ├── zlac_drive/             # ZLAC8015D Modbus ros2_control hardware plugin
+│   │   ├── optimus_depth/          # Depth camera (RealSense / Orbbec) obstacles and drop-offs
 │   │   ├── optimus_voice/          # Voice commands and text-to-speech
 │   │   └── optimus_sim/            # Gazebo Sim warehouse and obstacle tests (Jazzy only)
-│   ├── maps/                       # Sample warehouse map
 │   ├── locations/                  # Sample saved locations
 │   ├── tools/                      # Hardware test scripts, systemd service, TLS cert script
 │   └── docs/                       # Full documentation
-├── web_dashboard_src/
-│   └── web_dashboard/              # React 18 + Vite + Tailwind operator dashboard
-└── optimus_layout_patches/         # Patches for the LiDAR-on-top body layout
+└── web_dashboard_src/
+    └── web_dashboard/              # React 18 + Vite + Tailwind operator dashboard
 ```
 
 ### ROS 2 packages
 
 | Package | Language | Purpose |
 |---|---|---|
-| `optimus_bot` | C++ / Python | Robot description, drivetrain kinematics and odometry, system manager (state machine), location manager, scan filter, launch files, Nav2/SLAM/AMCL configs, custom services (`SetMode`, `MapOperation`, `NavigateToPose`, `SetInitialPose`) |
+| `optimus_bot` | C++ / Python | Robot description, drivetrain kinematics and odometry, system manager (state machine), location manager, scan filter, camera nodes (`camera_publisher_node`, `camera_obstacle_node`, `camera_stream_node`), launch files, Nav2/SLAM/AMCL configs, custom services (`SetMode`, `MapOperation`, `NavigateToPose`, `SetInitialPose`) |
 | `zlac_drive` | C++ | ros2_control `SystemInterface` for the ZLAC8015D: termios serial, Modbus RTU with CRC-16, register map, diagnostics, gtest suite |
+| `optimus_depth` | Python | Depth camera drivers and mount TF (RealSense / Orbbec profiles), `depth_obstacle_node` publishing obstacle and clearing point clouds for Nav2's `depth_layer` |
 | `optimus_voice` | Python | Vosk speech recognition, intent parser, Piper/espeak TTS, waypoint commands |
 | `optimus_sim` | Python | Gazebo Sim warehouse world, Nav2 parameters, obstacle spawning and traffic tests |
 
@@ -159,6 +165,9 @@ ros2 launch optimus_bot bringup.launch.py
 # With voice commands
 ros2 launch optimus_bot bringup.launch.py use_voice:=true
 
+# Camera selection (default camera:=laptop; camera:=none to disable)
+ros2 launch optimus_bot bringup.launch.py camera:=picam depth_camera:=realsense
+
 # Simulated robot
 ros2 launch optimus_bot bringup.launch.py simulation:=true use_sim_time:=true
 ```
@@ -173,10 +182,10 @@ npm install
 npm run dev
 ```
 
-Open `http://localhost:3000`. If the robot is a different machine, add `?ros_host=<robot-ip>`. You can also set a default in `.env`:
+Open `http://localhost:3000`. If the robot is a different machine, add `?ros_host=<robot-ip>`. You can also set a default by copying `.env.example` to `.env`:
 
 ```bash
-VITE_ROSBRIDGE_URL=ws://<robot-ip>:9090
+cp .env.example .env    # then edit: VITE_ROSBRIDGE_URL=ws://<robot-ip>:9090
 ```
 
 Then open **Diagnostics → RUN SELF-TEST**, and follow the **SOP GUIDE**.
@@ -229,7 +238,8 @@ colcon test && colcon test-result --verbose
 The tests include:
 
 - **zlac_drive**: gtest suites for the Modbus client, driver, motor model and hardware interface
-- **optimus_bot**: URDF and launch-file checks
+- **optimus_bot**: URDF and launch-file checks, camera obstacle detector and camera stream tests
+- **optimus_depth**: depth obstacle detector tests
 - **optimus_voice**: intent-parser tests
 - **optimus_sim**: package file checks
 
@@ -248,6 +258,7 @@ Manual hardware test plans for motors, LiDAR, SLAM, navigation and odometry cali
 | [Mapping](optimus_ws/docs/MAPPING.md) | SLAM Toolbox, pre-flight checks, saving maps |
 | [Localization](optimus_ws/docs/LOCALIZATION.md) | Map Server, AMCL, initial pose |
 | [Navigation](optimus_ws/docs/NAVIGATION.md) | Nav2, costmaps, planner, click-to-nav |
+| [Cameras](optimus_ws/docs/CAMERA.md) | Camera and depth-camera obstacle avoidance, dashboard camera view |
 | [Web Dashboard](optimus_ws/docs/WEB_DASHBOARD.md) | Pages, voice, teleop, code structure |
 | [Hardware Migration](optimus_ws/docs/HARDWARE_MIGRATION.md) | Moving from simulation to the physical robot |
 | [Real Robot Operation](optimus_ws/docs/REAL_ROBOT_OPERATION.md) | Bringup, operations, service calls |
@@ -261,7 +272,7 @@ Each package also has its own README under `optimus_ws/src/`.
 ## Roadmap
 
 - [ ] ESP32-S2 sensor hub: IMU, rear ToF sensors, real battery monitor, E-stop sense
-- [ ] Depth camera for 3D obstacle detection
+- [x] Camera and depth-camera obstacle detection
 - [ ] IMU + wheel odometry fusion (robot_localization EKF)
 - [ ] `twist_mux` so the software E-stop locks out every velocity source
 - [ ] Authentication on rosbridge
