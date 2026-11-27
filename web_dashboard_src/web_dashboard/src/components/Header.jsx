@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { 
   Wifi, WifiOff, AlertOctagon, ShieldAlert, Cpu,
-  LayoutDashboard, Navigation, Settings2, PowerOff, BookOpen, Bot, Terminal, Mic
+  LayoutDashboard, Navigation, Settings2, PowerOff, BookOpen, Bot, Terminal, Mic, Camera
 } from 'lucide-react';
 import { pageIsSecure, normalizeRosUrl, certTrustUrl } from '../ros/rosConnection';
 
@@ -35,6 +35,7 @@ export default function Header({
   const templates = [
     { id: 'COCKPIT', label: 'Cockpit', icon: LayoutDashboard },
     { id: 'DISPATCHER', label: 'POI Dispatcher', icon: Navigation },
+    { id: 'CAMERAS', label: 'Cameras', icon: Camera },
     { id: 'DIAGNOSTICS', label: 'Diagnostics', icon: Cpu },
     { id: 'ANALYTICS', label: 'System Logs', icon: Terminal },
   ];
@@ -82,6 +83,8 @@ export default function Header({
             <button
               key={tmpl.id}
               onClick={() => onSelectTemplate?.(tmpl.id)}
+              title={tmpl.label}
+              aria-label={tmpl.label}
               className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-mono font-bold transition-all cursor-pointer whitespace-nowrap shrink-0 ${
                 isActive
                   ? 'bg-gradient-to-r from-orange-500 to-orange-600 text-white shadow-sm border border-orange-400/50 font-extrabold'
@@ -89,7 +92,8 @@ export default function Header({
               }`}
             >
               <Icon className={`w-3.5 h-3.5 shrink-0 ${isActive ? 'text-white' : 'text-slate-400'}`} />
-              <span>{tmpl.label}</span>
+              {/* Icon-only below 2xl so the header fits without horizontal scroll */}
+              <span className="hidden 2xl:inline">{tmpl.label}</span>
             </button>
           );
         })}

@@ -1,22 +1,14 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { Camera, Download, Maximize2, Pause, Play, VideoOff } from 'lucide-react';
-import rosConnection from '../ros/rosConnection';
+import {
+  FEED_INFO, useCameraFeeds, useCameraStream, streamStatus, emptyFeedText, toggleFullscreen,
+} from '../hooks/useCameraStream';
 
 /**
- * Live camera view. Frames come from camera_stream_node on the robot as small
- * JPEGs over rosbridge: /dashboard/camera/<feed>/compressed. A feed is only
- * streamed while this panel is open on that feed.
+ * Compact live camera view for the cockpit side panel. A feed is only
+ * streamed while this panel is open on that feed. The full multi-feed view
+ * is the Cameras page (templates/CamerasTemplate.jsx).
  */
-
-const FEED_INFO = {
-  front: { label: 'Front', title: 'Front camera (laptop webcam / Pi camera)' },
-  obstacles: { label: 'Obstacles', title: 'Camera obstacle detection: red = not floor, green = obstacle base' },
-  depth_color: { label: 'Depth RGB', title: 'Depth camera colour image' },
-  depth: { label: 'Depth', title: 'Depth map: red = near, blue = far, black = no reading' },
-};
-
-// Shown before the robot reports its feed list.
-const FALLBACK_FEEDS = ['front', 'obstacles', 'depth_color', 'depth'].map((name) => ({ name, live: null }));
 
 const STORAGE_KEY = 'optimus_camera_feed';
 
@@ -29,27 +21,11 @@ function readSavedFeed() {
 }
 
 export default function CameraView({ connected }) {
-  const [feeds, setFeeds] = useState(
-    rosConnection.cameraFeeds.length ? rosConnection.cameraFeeds : FALLBACK_FEEDS
-  );
+  const feeds = useCameraFeeds();
   const [feed, setFeed] = useState(readSavedFeed);
   const [paused, setPaused] = useState(false);
-  const [fps, setFps] = useState(0);
-  const [hasFrame, setHasFrame] = useState(false);
-  const [stale, setStale] = useState(false);
-
-  const imgRef = useRef(null);
   const boxRef = useRef(null);
-  const frameCountRef = useRef(0);
-  const lastFrameAtRef = useRef(0);
-  const latestSrcRef = useRef(null);
-
-  // Feed listing from the robot.
-  useEffect(() => {
-    const onFeeds = (list) => setFeeds(list.length ? list : FALLBACK_FEEDS);
-    rosConnection.on('cameraFeeds', onFeeds);
-    return () => rosConnection.off('cameraFeeds', onFeeds);
-  }, []);
+  const { imgRef, hasFrame, stale, fps, snapshot } = useCameraStream(feed, { connected, paused });
 
   // Fall back to a live feed if the saved one does not exist on this robot.
   useEffect(() => {
@@ -64,63 +40,11 @@ export default function CameraView({ connected }) {
     } catch (_) {}
   }, [feed]);
 
-  // Frame subscription. Images are written straight to the <img> element so
-  // a 10 fps stream does not re-render React on every frame.
-  useEffect(() => {
-    setHasFrame(false);
-    lastFrameAtRef.current = 0;
-    if (!connected || paused) return undefined;
-    const unsubscribe = rosConnection.subscribeCamera(feed, (src) => {
-      latestSrcRef.current = src;
-      if (imgRef.current) imgRef.current.src = src;
-      frameCountRef.current += 1;
-      if (!lastFrameAtRef.current) setHasFrame(true);
-      lastFrameAtRef.current = Date.now();
-    });
-    return unsubscribe;
-  }, [feed, connected, paused]);
-
-  // fps + stale indicator, once a second.
-  useEffect(() => {
-    const timer = setInterval(() => {
-      setFps(frameCountRef.current);
-      frameCountRef.current = 0;
-      setStale(lastFrameAtRef.current > 0 && Date.now() - lastFrameAtRef.current > 3000);
-    }, 1000);
-    return () => clearInterval(timer);
-  }, []);
-
-  const fullscreen = () => {
-    const el = boxRef.current;
-    if (!el) return;
-    if (document.fullscreenElement) document.exitFullscreen?.();
-    else el.requestFullscreen?.();
-  };
-
-  const snapshot = () => {
-    if (!latestSrcRef.current) return;
-    const a = document.createElement('a');
-    a.href = latestSrcRef.current;
-    a.download = `optimus_${feed}_${new Date().toISOString().replace(/[:.]/g, '-')}.jpg`;
-    a.click();
-  };
+  const fullscreen = () => toggleFullscreen(boxRef.current);
 
   const current = feeds.find((f) => f.name === feed);
-  let status;
-  if (!connected) status = { text: 'OFFLINE', cls: 'bg-slate-800 text-slate-300 border-slate-700' };
-  else if (paused) status = { text: 'PAUSED', cls: 'bg-slate-800 text-slate-200 border-slate-700' };
-  else if (hasFrame && !stale) status = { text: `LIVE • ${fps} FPS`, cls: 'bg-emerald-500/15 text-emerald-300 border-emerald-500/40' };
-  else if (stale) status = { text: 'STALLED', cls: 'bg-amber-500/15 text-amber-300 border-amber-500/40' };
-  else status = { text: 'NO SIGNAL', cls: 'bg-amber-500/15 text-amber-300 border-amber-500/40' };
-
-  let emptyText = 'Waiting for frames…';
-  if (!connected) emptyText = 'Connect to the robot to see its cameras.';
-  else if (paused) emptyText = 'Stream paused.';
-  else if (current && current.live === false) {
-    emptyText = feed.startsWith('depth')
-      ? 'No depth camera running. Start the robot with depth_camera:=realsense (or orbbec).'
-      : 'Camera not running. Start the robot with camera:=laptop (or picam).';
-  }
+  const status = streamStatus({ connected, paused, hasFrame, stale, fps });
+  const emptyText = emptyFeedText(feed, { connected, paused, live: current?.live });
 
   return (
     <div className="flex flex-col gap-3 font-mono">

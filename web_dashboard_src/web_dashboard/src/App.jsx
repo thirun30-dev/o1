@@ -18,6 +18,7 @@ import VoiceCommandModal from './components/VoiceCommandModal';
 import MissionDispatcherTemplate from './components/templates/MissionDispatcherTemplate';
 import AnalyticsTemplate from './components/templates/AnalyticsTemplate';
 import DiagnosticsTemplate from './components/templates/DiagnosticsTemplate';
+import CamerasTemplate from './components/templates/CamerasTemplate';
 
 import { 
   Gamepad2, MapPin, Layers, Activity, Sparkles, CheckCircle2, ChevronRight, Cpu,
@@ -425,6 +426,15 @@ export default function App() {
           />
         )}
 
+        {/* TEMPLATE: CAMERAS (all feeds, grid or focus) */}
+        {activeTemplate === 'CAMERAS' && (
+          <CamerasTemplate
+            connected={connected}
+            velocity={velocity}
+            navStatus={navStatus}
+          />
+        )}
+
         {/* TEMPLATE 3: LOGS & TELEMETRY ANALYTICS */}
         {/* TEMPLATE: HARDWARE DIAGNOSTICS (robot specification + live health) */}
         {activeTemplate === 'DIAGNOSTICS' && (
@@ -474,6 +484,16 @@ export default function App() {
         >
           <NavIcon className="w-4 h-4" />
           <span className="text-[10px]">Dispatch</span>
+        </button>
+
+        <button
+          onClick={() => setActiveTemplate('CAMERAS')}
+          className={`flex flex-col items-center gap-0.5 py-1 px-3 rounded-xl transition-all cursor-pointer ${
+            activeTemplate === 'CAMERAS' ? 'text-orange-400 font-extrabold bg-slate-900 border border-orange-500/40 shadow-xs' : 'text-slate-400 hover:text-white'
+          }`}
+        >
+          <Camera className="w-4 h-4" />
+          <span className="text-[10px]">Cameras</span>
         </button>
 
         <button
