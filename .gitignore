@@ -1,0 +1,17 @@
+# Dashboard (npm / Vite)
+node_modules/
+dist/
+.env
+.env.*
+!.env.example
+
+# colcon build output (root and optimus_ws/)
+build/
+install/
+log/
+
+# Python / editors
+__pycache__/
+*.pyc
+.vscode/
+.idea/
