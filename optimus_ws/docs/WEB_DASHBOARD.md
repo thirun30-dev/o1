@@ -29,6 +29,24 @@ When the dashboard runs on a laptop and the robot on a Raspberry Pi, open
 `http://localhost:3000/?ros_host=<pi-ip>`. Serving from `localhost` also lets
 the browser microphone work for voice commands.
 
+### Using the Vercel (https://) deployment on the same Wi-Fi
+
+Browsers block `ws://` from an `https://` page, so the hosted dashboard
+connects with `wss://` and rosbridge must run with TLS:
+
+1. On the Pi, once: `~/optimus_ws/tools/optimus install` and
+   `optimus url https://<your-app>.vercel.app`
+2. Start the robot: **`optimus`**. It creates or renews the certificate,
+   prints the links below and runs bringup with `rosbridge_ssl:=true`.
+   Extra launch args pass through, e.g. `optimus use_voice:=true`.
+   The systemd service (`tools/optimus-bringup.service`) runs the same command.
+3. On each phone or laptop, once: open `https://<pi-ip>:9090` and accept the
+   certificate warning.
+4. Open `https://<your-app>.vercel.app/?ros_host=<pi-ip>`. If Chrome asks to
+   access devices on your local network, choose **Allow**.
+
+`ws://` URLs are upgraded to `wss://` automatically on https pages.
+
 ---
 
 ## 2. Pages

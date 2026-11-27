@@ -5,6 +5,36 @@
 
 import ROSLIB from 'roslib';
 
+/** True when the dashboard itself is served over HTTPS (e.g. Vercel). */
+export const pageIsSecure = () =>
+  typeof window !== 'undefined' && window.location && window.location.protocol === 'https:';
+
+/**
+ * Browsers block plain ws:// from an https:// page (mixed content), so on a
+ * secure page every rosbridge URL is upgraded to wss://.  rosbridge on the
+ * robot must then be started with SSL (see rosbridge.launch.py use_ssl).
+ */
+export function normalizeRosUrl(url) {
+  if (!url) return url;
+  let u = String(url).trim();
+  if (!/^wss?:\/\//i.test(u)) u = `ws://${u}`;
+  if (pageIsSecure()) u = u.replace(/^ws:\/\//i, 'wss://');
+  return u;
+}
+
+/**
+ * https:// address of the rosbridge port.  With a self-signed certificate the
+ * browser must visit this once and accept the warning before wss:// works.
+ */
+export function certTrustUrl(url) {
+  try {
+    const parsed = new URL(normalizeRosUrl(url).replace(/^ws/i, 'http'));
+    return `https://${parsed.host}/`;
+  } catch (_) {
+    return null;
+  }
+}
+
 class ROSConnectionManager {
   constructor() {
     this.ros = null;
@@ -55,15 +85,15 @@ class ROSConnectionManager {
     const savedUrl = typeof window !== 'undefined' ? localStorage.getItem('rosbridge_url') : null;
     const configuredUrl = import.meta.env.VITE_ROSBRIDGE_URL;
     const defaultHost = (typeof window !== 'undefined' && window.location.hostname) ? window.location.hostname : 'localhost';
-    this.url = queryUrl || savedUrl || configuredUrl || `ws://${defaultHost}:9090`;
+    this.url = normalizeRosUrl(queryUrl || savedUrl || configuredUrl || `ws://${defaultHost}:9090`);
   }
 
   connect(customUrl = null) {
     this.manualDisconnect = false;
     if (customUrl) {
-      this.url = customUrl;
+      this.url = normalizeRosUrl(customUrl);
       if (typeof window !== 'undefined') {
-        localStorage.setItem('rosbridge_url', customUrl);
+        localStorage.setItem('rosbridge_url', this.url);
       }
       if (this.ros) {
         try {

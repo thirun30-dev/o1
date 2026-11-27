@@ -9,7 +9,8 @@ User=dk
 WorkingDirectory=/home/dk/optimus_ws
 Environment="HOME=/home/dk"
 Environment="PYTHONUNBUFFERED=1"
-ExecStart=/bin/bash -c "source /opt/ros/humble/setup.bash && source /home/dk/optimus_ws/install/setup.bash && exec ros2 launch optimus_bot bringup.launch.py"
+# Same as typing "optimus": certificate check + bringup with wss:// rosbridge
+ExecStart=/home/dk/optimus_ws/tools/optimus
 Restart=on-failure
 RestartSec=5s
 KillMode=mixed

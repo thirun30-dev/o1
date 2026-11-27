@@ -1,0 +1,113 @@
+#!/usr/bin/env bash
+# optimus - one command to start the robot for the web dashboard.
+#
+#   optimus                 start everything (cert check + bringup with wss://)
+#   optimus <launch args>   same, with extra bringup args, e.g. optimus use_voice:=true
+#   optimus install         make the "optimus" command available (run once)
+#   optimus cert            force a new TLS certificate
+#   optimus url <link>      save your Vercel dashboard link (shown at start-up)
+#
+# What "optimus" does:
+#   1. sources ROS 2 and this workspace
+#   2. creates / renews the rosbridge certificate when missing or the IP changed
+#   3. prints the links to open on your phone or laptop
+#   4. runs: ros2 launch optimus_bot bringup.launch.py rosbridge_ssl:=true
+set -eo pipefail
+
+SELF="$(readlink -f "${BASH_SOURCE[0]}")"
+TOOLS_DIR="$(dirname "${SELF}")"
+WS_DIR="$(dirname "${TOOLS_DIR}")"
+# Use whichever ROS 2 is installed (humble on the Pi, jazzy on Ubuntu 24.04 laptops).
+if [[ -z "${ROS_DISTRO_DIR:-}" ]]; then
+  for d in /opt/ros/humble /opt/ros/jazzy /opt/ros/*; do
+    [[ -f "$d/setup.bash" ]] && { ROS_DISTRO_DIR="$d"; break; }
+  done
+fi
+CERT_DIR="${HOME}/.optimus_certs"
+CERT="${CERT_DIR}/rosbridge.crt"
+URL_FILE="${HOME}/.optimus_dashboard_url"
+PORT=9090
+
+pi_ips() { hostname -I 2>/dev/null | tr ' ' '\n' | grep -E '^[0-9]+(\.[0-9]+){3}$' || true; }
+
+cert_covers_ips() {
+  [[ -f "${CERT}" && -f "${CERT_DIR}/rosbridge.key" ]] || return 1
+  openssl x509 -checkend 86400 -noout -in "${CERT}" >/dev/null 2>&1 || return 1
+  local san
+  san="$(openssl x509 -in "${CERT}" -noout -text 2>/dev/null | grep -A1 'Subject Alternative Name' || true)"
+  for ip in $(pi_ips); do
+    grep -q "IP Address:${ip}\b" <<<"${san}" || return 1
+  done
+}
+
+make_cert() { "${TOOLS_DIR}/make_rosbridge_cert.sh" >/dev/null 2>&1 && echo "[optimus] Certificate ready for: $(pi_ips | xargs)"; }
+
+case "${1:-}" in
+  install)
+    mkdir -p "${HOME}/.local/bin"
+    ln -sf "${SELF}" "${HOME}/.local/bin/optimus"
+    if ! grep -qs 'HOME/.local/bin' "${HOME}/.bashrc"; then
+      echo 'export PATH="$HOME/.local/bin:$PATH"' >> "${HOME}/.bashrc"
+    fi
+    echo "[optimus] Installed. Open a new terminal (or run: source ~/.bashrc), then type: optimus"
+    exit 0 ;;
+  cert)
+    make_cert; exit 0 ;;
+  url)
+    [[ -n "${2:-}" ]] || { echo "usage: optimus url https://<your-app>.vercel.app"; exit 1; }
+    echo "${2%/}" > "${URL_FILE}"
+    echo "[optimus] Dashboard link saved: ${2%/}"; exit 0 ;;
+  -h|--help|help)
+    sed -n '2,15p' "${SELF}" | sed 's/^# \{0,1\}//'; exit 0 ;;
+esac
+
+# Already running as the systemd service? Then only show the links.
+ALREADY_RUNNING=0
+# (INVOCATION_ID is set when systemd itself runs this script.)
+if [[ -z "${INVOCATION_ID:-}" ]] && systemctl is-active --quiet optimus-bringup 2>/dev/null; then
+  ALREADY_RUNNING=1
+fi
+
+# 1. ROS environment
+# shellcheck disable=SC1091
+[[ -f "${ROS_DISTRO_DIR:-}/setup.bash" ]] || { echo "[optimus] ROS 2 not found in /opt/ros"; exit 1; }
+source "${ROS_DISTRO_DIR}/setup.bash"
+if [[ -f "${WS_DIR}/install/setup.bash" ]]; then
+  # shellcheck disable=SC1091
+  source "${WS_DIR}/install/setup.bash"
+else
+  echo "[optimus] Workspace not built. Run: cd ${WS_DIR} && colcon build --symlink-install"
+  exit 1
+fi
+
+# 2. Certificate
+if ! cert_covers_ips; then
+  echo "[optimus] Creating rosbridge certificate (first run or IP changed)..."
+  make_cert
+  if [[ ${ALREADY_RUNNING} -eq 1 ]]; then
+    echo "[optimus] Restart the service to use it: sudo systemctl restart optimus-bringup"
+  fi
+fi
+
+# 3. Links
+DASH_URL="$(cat "${URL_FILE}" 2>/dev/null || true)"
+DASH_URL="${OPTIMUS_DASHBOARD_URL:-${DASH_URL:-https://<your-app>.vercel.app}}"
+IP="$(pi_ips | head -n1)"
+echo
+echo "=================== OPTIMUS ==================="
+echo " Robot IP : ${IP:-unknown}"
+echo " Step 1   : (once per device) open  https://${IP}:${PORT}"
+echo "            and accept the certificate warning"
+echo " Step 2   : open  ${DASH_URL}/?ros_host=${IP}"
+echo "            (allow 'local network access' if asked)"
+echo "==============================================="
+echo
+
+if [[ ${ALREADY_RUNNING} -eq 1 ]]; then
+  echo "[optimus] Robot is already running (optimus-bringup service)."
+  echo "          Logs: journalctl -u optimus-bringup -f"
+  exit 0
+fi
+
+# 4. Bringup
+exec ros2 launch optimus_bot bringup.launch.py rosbridge_ssl:=true "$@"

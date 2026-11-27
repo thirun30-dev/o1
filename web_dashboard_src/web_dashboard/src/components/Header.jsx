@@ -3,6 +3,7 @@ import {
   Wifi, WifiOff, AlertOctagon, ShieldAlert, Cpu,
   LayoutDashboard, Navigation, Settings2, PowerOff, BookOpen, Bot, Terminal, Mic
 } from 'lucide-react';
+import { pageIsSecure, normalizeRosUrl, certTrustUrl } from '../ros/rosConnection';
 
 export default function Header({ 
   connected, 
@@ -199,6 +200,32 @@ export default function Header({
                   </button>
                 </div>
               </div>
+
+              {/* HTTPS (e.g. Vercel) needs wss:// with a trusted certificate */}
+              {pageIsSecure() && !connected && (
+                <div className="space-y-1.5 text-[10px] leading-relaxed text-amber-200 bg-amber-950/60 border border-amber-800 rounded-xl p-2.5">
+                  <div className="font-bold text-amber-300">Opened over HTTPS</div>
+                  <div>
+                    This page connects with <span className="text-white">{normalizeRosUrl(customWsUrl)}</span>.
+                    rosbridge on the robot must run with <span className="text-white">use_ssl:=true</span>.
+                  </div>
+                  {certTrustUrl(customWsUrl) && (
+                    <div>
+                      First time on this device: open{' '}
+                      <a
+                        href={certTrustUrl(customWsUrl)}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="underline text-orange-300 hover:text-orange-200 break-all"
+                      >
+                        {certTrustUrl(customWsUrl)}
+                      </a>
+                      , accept the certificate warning, then press Connect. If Chrome asks to
+                      access devices on your local network, choose Allow.
+                    </div>
+                  )}
+                </div>
+              )}
 
               {/* Quick Presets */}
               <div className="space-y-1.5 text-[10px] text-slate-400 pt-1 border-t border-slate-800">

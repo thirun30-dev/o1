@@ -49,6 +49,13 @@ def generate_launch_description():
         default_value='true',
         description='Start rosbridge WebSocket server on port 9090'
     )
+    rosbridge_ssl_arg = DeclareLaunchArgument(
+        'rosbridge_ssl',
+        default_value='false',
+        description=('Serve rosbridge as wss:// (needed when the dashboard is opened '
+                     'over https://, e.g. from Vercel). Certificate: '
+                     'tools/make_rosbridge_cert.sh')
+    )
     use_system_mgr_arg = DeclareLaunchArgument(
         'use_system_manager',
         default_value='true',
@@ -118,6 +125,7 @@ def generate_launch_description():
     # 3. rosbridge WebSocket Server
     rosbridge_launch = IncludeLaunchDescription(
         PythonLaunchDescriptionSource(os.path.join(pkg_optimus, 'launch', 'rosbridge.launch.py')),
+        launch_arguments={'use_ssl': LaunchConfiguration('rosbridge_ssl')}.items(),
         condition=IfCondition(use_rosbridge)
     )
 
@@ -170,6 +178,7 @@ def generate_launch_description():
         use_sim_time_arg,
         rviz_arg,
         use_rosbridge_arg,
+        rosbridge_ssl_arg,
         use_system_mgr_arg,
         use_location_mgr_arg,
         use_voice_arg,
