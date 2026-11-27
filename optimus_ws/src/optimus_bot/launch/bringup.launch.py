@@ -24,8 +24,8 @@ from launch.conditions import IfCondition, UnlessCondition
 from launch.launch_description_sources import PythonLaunchDescriptionSource
 from launch.substitutions import LaunchConfiguration, PathJoinSubstitution, PythonExpression
 from launch_ros.actions import Node
-import yaml
 from launch_ros.substitutions import FindPackageShare
+import yaml
 
 
 def _camera_stream(context):
@@ -171,8 +171,9 @@ def generate_launch_description():
                 PythonLaunchDescriptionSource(PathJoinSubstitution(
                     [FindPackageShare('optimus_depth'), 'launch', 'depth_camera.launch.py'])),
                 launch_arguments={'depth_camera': LaunchConfiguration('depth_camera')}.items(),
-                condition=UnlessCondition(PythonExpression(
-                    ["'", LaunchConfiguration('depth_camera'), "' in ('', 'none', 'false', 'off')"]))
+                condition=UnlessCondition(PythonExpression([
+                    "'", LaunchConfiguration('depth_camera'),
+                    "' in ('', 'none', 'false', 'off')"]))
             )
         ]
     )
