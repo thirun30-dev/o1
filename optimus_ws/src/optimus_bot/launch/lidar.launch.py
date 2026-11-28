@@ -29,6 +29,7 @@ from launch import LaunchDescription
 from launch.actions import DeclareLaunchArgument, LogInfo, OpaqueFunction, TimerAction
 from launch.substitutions import LaunchConfiguration
 from launch_ros.actions import Node
+from launch_ros.parameter_descriptions import ParameterValue
 import yaml
 
 # Used only when the stable by-id link from lidar.yaml does not exist (e.g. a
@@ -83,6 +84,10 @@ def generate_launch_description():
             'serial_port', default_value='',
             description='Override the LiDAR serial port (default: config/lidar.yaml)'),
         DeclareLaunchArgument(
+            'lidar_yaw_deg',
+            default_value='180',
+            description='LiDAR mount yaw (deg); /scan is rotated by this so it is robot-forward'),
+        DeclareLaunchArgument(
             'lidar_fov_deg',
             default_value='360',
             description='Degrees of the scan published on /scan, centred on +X'),
@@ -92,6 +97,9 @@ def generate_launch_description():
             executable='front_scan_filter.py',
             name='front_scan_filter',
             output='screen',
-            parameters=[{'field_of_view_deg': LaunchConfiguration('lidar_fov_deg')}],
+            parameters=[{
+                "field_of_view_deg": ParameterValue(LaunchConfiguration("lidar_fov_deg"), value_type=float),
+                "angle_offset_deg": ParameterValue(LaunchConfiguration("lidar_yaw_deg"), value_type=float),
+            }],
         ),
     ])

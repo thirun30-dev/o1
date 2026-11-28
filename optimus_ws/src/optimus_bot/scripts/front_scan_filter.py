@@ -67,6 +67,12 @@ class FrontScanFilter(Node):
         # bounded while retaining enough angular resolution for SLAM/Nav2.
         self.max_output_rays = int(self.declare_parameter('max_output_rays', 720).value)
         fov_deg = float(self.declare_parameter('field_of_view_deg', 360.0).value)
+        # Mount yaw of the LiDAR on the robot.  The A1M8 scan-zero faces the
+        # robot REAR as mounted, so the scan is rotated here (not in the URDF)
+        # and /scan comes out robot-forward: SLAM, Nav2 and the dashboard,
+        # which draws /scan assuming a zero-yaw mount, then all agree.
+        self.angle_offset = math.radians(float(
+            self.declare_parameter('angle_offset_deg', 180.0).value))
         fov_deg = min(360.0, max(10.0, fov_deg))
         self.half_fov = math.radians(fov_deg) / 2.0
         self.full_circle = fov_deg >= 359.9
@@ -81,7 +87,8 @@ class FrontScanFilter(Node):
         # [-pi, pi] or [0, 2*pi], including the forward-sector wraparound.
         selected = []
         for index, range_value in enumerate(scan.ranges):
-            angle = self._normalize(scan.angle_min + index * scan.angle_increment)
+            angle = self._normalize(
+                scan.angle_min + index * scan.angle_increment + self.angle_offset)
             if self.full_circle or -self.half_fov <= angle <= self.half_fov:
                 selected.append((angle, range_value, index))
 
@@ -89,21 +96,46 @@ class FrontScanFilter(Node):
             self.get_logger().warning('Received a scan with no rays in the field of view')
             return
 
-        selected.sort(key=lambda item: item[0])
-        sample_step = max(1, math.ceil(len(selected) / self.max_output_rays))
-        selected = selected[::sample_step]
+        # Resample onto a FIXED, evenly spaced angle grid.  slam_toolbox
+        # requires len(ranges) == round((angle_max - angle_min) /
+        # angle_increment) + 1 and the same ray count on every scan; the raw
+        # A1 angles are not evenly spaced, so decimating them gave 720 rays
+        # for a grid that implied 721 and SLAM rejected every scan.
+        if self.full_circle:
+            n_bins = self.max_output_rays
+            start = -math.pi
+            increment = 2.0 * math.pi / n_bins
+        else:
+            fov = 2.0 * self.half_fov
+            n_bins = max(2, int(round(self.max_output_rays * fov / (2.0 * math.pi))))
+            start = -self.half_fov
+            increment = fov / (n_bins - 1)
+        ranges = [float('inf')] * n_bins
+        chosen = [None] * n_bins
+        for angle, range_value, index in selected:
+            b = int(round((angle - start) / increment))
+            if self.full_circle:
+                b %= n_bins
+            elif not 0 <= b < n_bins:
+                continue
+            if not (scan.range_min <= range_value <= scan.range_max):
+                continue
+            if range_value < ranges[b]:
+                ranges[b] = range_value
+                chosen[b] = index
         output = LaserScan()
         output.header = scan.header
-        output.angle_min = selected[0][0]
-        output.angle_max = selected[-1][0]
-        output.angle_increment = scan.angle_increment * sample_step
-        output.time_increment = scan.time_increment
+        output.angle_min = start
+        output.angle_increment = increment
+        output.angle_max = start + (n_bins - 1) * increment
+        output.time_increment = 0.0
         output.scan_time = scan.scan_time
         output.range_min = scan.range_min
         output.range_max = scan.range_max
-        output.ranges = [item[1] for item in selected]
+        output.ranges = ranges
         if scan.intensities:
-            output.intensities = [scan.intensities[item[2]] for item in selected]
+            output.intensities = [
+                scan.intensities[i] if i is not None else 0.0 for i in chosen]
         self.publisher.publish(output)
 
 

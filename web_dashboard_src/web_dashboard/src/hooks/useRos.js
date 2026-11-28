@@ -78,6 +78,8 @@ export function useRos() {
     const onLocalPlan = (data) => setLocalPath(data);
     const onOperation = (data) => {
       setOperationResult(data);
+      // Drop the old grid right away; the restarted SLAM publishes a fresh one.
+      if (data && data.operation === 'reset_mapping' && data.success) setMapData(null);
       if (data && data.message) {
         setNotice(data.message);
         setTimeout(() => setNotice(''), 6000);

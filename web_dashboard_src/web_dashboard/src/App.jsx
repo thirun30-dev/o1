@@ -250,6 +250,8 @@ export default function App() {
                   locations={locations}
                   onSendGoal={(x, y, yaw) => sendGoal(x, y, yaw, 'map')}
                   onSetInitialPose={(x, y, yaw) => setInitialPose(x, y, yaw)}
+                  onResetMap={() => sendCommand({ action: 'reset_mapping' })}
+                  canResetMap={connected && systemState?.state === 'MAPPING'}
                   onSaveLocationAtPose={(x, y, yaw) => {
                     const name = prompt(
                       `Enter Waypoint Name for coordinates (${x.toFixed(2)}, ${y.toFixed(2)}):`,

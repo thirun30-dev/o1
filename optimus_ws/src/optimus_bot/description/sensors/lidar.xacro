@@ -38,6 +38,9 @@
     <origin
       xyz="${lidar_x} ${lidar_y} ${lidar_z}"
       rpy="0 0 0"/>
+    <!-- The A1M8 is mounted with its scan-zero facing the robot REAR.  That
+         180 deg is corrected in front_scan_filter (lidar_yaw_deg launch arg),
+         so /scan is already robot-forward and this joint stays at yaw 0. -->
 
   </joint>
 

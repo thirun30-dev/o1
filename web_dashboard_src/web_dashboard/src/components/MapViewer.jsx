@@ -14,6 +14,9 @@ export default function MapViewer({
   onSendGoal,
   onSaveLocationAtPose,
   onSetInitialPose,
+  // Reset (clear) the live SLAM map; button shown only while canResetMap
+  onResetMap,
+  canResetMap = false,
   // Fixed base_link -> lidar_link URDF transform (see config/robotSpec.js)
   lidarOffsetX = ROBOT_SPEC.lidar.mountForwardM
 }) {
@@ -933,6 +936,22 @@ export default function MapViewer({
               <span className="hidden sm:inline">Mark Pin</span>
               <span className="sm:hidden">Pin</span>
             </button>
+
+            {onResetMap && canResetMap && (
+              <button
+                onClick={() => {
+                  if (window.confirm('Reset the map? The current unsaved map is discarded and mapping restarts from the robot\'s current position.')) {
+                    onResetMap();
+                  }
+                }}
+                className="px-2.5 sm:px-3 py-1.5 rounded-xl text-xs font-mono font-bold flex items-center gap-1 sm:gap-1.5 transition-all cursor-pointer text-slate-400 hover:text-white hover:bg-red-600/80"
+                title="Clear the live SLAM map and restart mapping from the current position"
+              >
+                <RotateCcw className="w-3.5 h-3.5 text-red-400" />
+                <span className="hidden sm:inline">Reset Map</span>
+                <span className="sm:hidden">Reset</span>
+              </button>
+            )}
 
             <div className="h-4 w-[1px] bg-slate-800 mx-0.5 sm:mx-1 hidden xs:block" />
 

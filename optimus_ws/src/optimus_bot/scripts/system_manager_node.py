@@ -464,6 +464,8 @@ class AMRSystemManager(Node):
             Trigger, '/amr/start_mapping', self._srv_start_mapping)
         self.srv_stop_mapping = self.create_service(
             Trigger, '/amr/stop_mapping', self._srv_stop_mapping)
+        self.srv_reset_mapping = self.create_service(
+            Trigger, '/amr/reset_mapping', self._srv_reset_mapping)
         self.srv_start_localization = self.create_service(
             Trigger, '/amr/start_localization', self._srv_start_localization)
         self.srv_stop_localization = self.create_service(
@@ -877,6 +879,9 @@ class AMRSystemManager(Node):
                 self._srv_start_mapping(Trigger.Request(), Trigger.Response())
             elif action == 'stop_mapping':
                 self._srv_stop_mapping(Trigger.Request(), Trigger.Response())
+            elif action == 'reset_mapping':
+                ok, result = self.reset_mapping()
+                self._publish_operation('reset_mapping', ok, result)
             elif action == 'save_map':
                 map_name = data.get('map_name', 'warehouse_map')
                 was_mapping = self.state_machine.current_state == AMRState.MAPPING
@@ -1067,6 +1072,28 @@ class AMRSystemManager(Node):
         ok, msg = self.state_machine.transition_to(AMRState.READY)
         response.success = ok
         response.message = 'Mapping stopped. System is READY.'
+        return response
+
+    def reset_mapping(self) -> tuple[bool, str]:
+        """Discard the current SLAM map and start mapping again from empty.
+
+        slam_toolbox (Jazzy) has no clear-map service, so the process is
+        restarted.  The new map starts at the robot's current pose.  Anything
+        not saved with save_map / serialize_pose_graph is lost.
+        """
+        if self.state_machine.current_state != AMRState.MAPPING:
+            return False, 'Reset map is only available while MAPPING.'
+        self.get_logger().info('Resetting map: restarting SLAM Toolbox')
+        self.supervisor.stop_slam()
+        time.sleep(1.0)  # let the old node leave the graph before relaunching
+        ok, msg = self.supervisor.start_slam()
+        if not ok:
+            self.state_machine.transition_to(AMRState.READY)
+            return False, f'Map reset failed, system is READY: {msg}'
+        return True, 'Map reset. Mapping restarted from an empty map.'
+
+    def _srv_reset_mapping(self, request, response):
+        response.success, response.message = self.reset_mapping()
         return response
 
     def _srv_start_localization(self, request, response):
