@@ -99,6 +99,7 @@ install(
     scripts/camera_publisher_node.py
     scripts/camera_obstacle_node.py
     scripts/camera_stream_node.py
+    scripts/joystick_gate_node.py
   DESTINATION
     lib/${PROJECT_NAME}
 )

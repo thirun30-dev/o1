@@ -1,7 +1,8 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { 
   ArrowUp, ArrowDown, ArrowLeft, ArrowRight, Square, Keyboard, Disc, 
-  Gauge, Zap, RotateCcw, RotateCw, Crosshair, Activity, CornerUpLeft, CornerUpRight
+  Gauge, Zap, RotateCcw, RotateCw, Crosshair, Activity, CornerUpLeft, CornerUpRight,
+  Gamepad2
 } from 'lucide-react';
 import { ROBOT_SPEC } from '../config/robotSpec';
 
@@ -15,8 +16,20 @@ export default function Teleop({
   velocity,
   battery,
   laserScan,
-  robotPose 
+  robotPose,
+  joystickStatus,
+  onSetExternalJoystick
 }) {
+  // External (robot-side) gamepad, gated by joystick_gate_node. While it has
+  // control the on-screen drive inputs are locked so the two never mix.
+  const extAvailable = joystickStatus != null;
+  const extEnabled = Boolean(joystickStatus?.enabled);
+  const extConnected = Boolean(joystickStatus?.device_connected);
+  const [extPending, setExtPending] = useState(false);
+  const driveLocked = Boolean(isEmergencyStop) || extEnabled;
+  const driveLockedRef = useRef(driveLocked);
+  driveLockedRef.current = driveLocked;
+
   const [maxLin, setMaxLin] = useState(0.25);
   const [maxAng, setMaxAng] = useState(0.60);
   const [isInchingMode, setIsInchingMode] = useState(false);
@@ -58,7 +71,7 @@ export default function Teleop({
   }, [onSendVelocity]);
 
   const executeMacro = useCallback((name, vx, wz, durationMs) => {
-    if (isEmergencyStop) return;
+    if (driveLocked) return;
     cancelMacro();
     setActiveMacro(name);
 
@@ -70,7 +83,7 @@ export default function Teleop({
     macroTimeoutRef.current = setTimeout(() => {
       cancelMacro();
     }, durationMs);
-  }, [cancelMacro, isEmergencyStop, onSendVelocity]);
+  }, [cancelMacro, driveLocked, onSendVelocity]);
 
   const stopRobot = useCallback(() => {
     cancelMacro();
@@ -112,7 +125,7 @@ export default function Teleop({
   }, [onSendVelocity]);
 
   const startButtonDrive = useCallback((linear, angular, dir, e) => {
-    if (isEmergencyStop) return;
+    if (driveLocked) return;
     cancelMacro();
     if (e) {
       if (e.cancelable) e.preventDefault();
@@ -139,7 +152,7 @@ export default function Teleop({
     buttonIntervalRef.current = setInterval(() => {
       onSendVelocity?.(linear, angular);
     }, 100);
-  }, [cancelMacro, isEmergencyStop, onSendVelocity]);
+  }, [cancelMacro, driveLocked, onSendVelocity]);
 
   // Keyboard navigation listener (W/A/S/D and Arrow Keys)
   useEffect(() => {
@@ -155,6 +168,7 @@ export default function Teleop({
         // publishes a zero twist, so calling it on every repeat interleaved
         // stops with the drive commands and made the robot stutter.
         if (e.repeat) return;
+        if (key !== ' ' && driveLockedRef.current) return;
         if (macroIntervalRef.current) cancelMacro();
         heldKeys.add(key);
         setActiveKeys(prev => ({ ...prev, [key]: true }));
@@ -172,7 +186,8 @@ export default function Teleop({
       });
       if (key === ' ') {
         stopRobot();
-      } else if (DRIVE_KEYS.includes(key) && !DRIVE_KEYS.some(k => heldKeys.has(k))) {
+      } else if (DRIVE_KEYS.includes(key) && !DRIVE_KEYS.some(k => heldKeys.has(k)) &&
+                 !driveLockedRef.current) {
         // Last drive key released: stop now rather than coasting until the
         // drivetrain's cmd_vel timeout.
         onSendVelocity?.(0.0, 0.0);
@@ -184,7 +199,8 @@ export default function Teleop({
     const releaseAll = () => {
       heldKeys.clear();
       setActiveKeys({});
-      stopRobot();
+      // Leaving the tab must not interrupt the external gamepad.
+      if (!driveLockedRef.current) stopRobot();
     };
     const handleVisibility = () => {
       if (document.hidden) releaseAll();
@@ -204,8 +220,10 @@ export default function Teleop({
 
   // Drive loop at 10 Hz
   useEffect(() => {
-    if (isEmergencyStop) {
-      cancelMacro();
+    if (driveLocked) {
+      // Under external-joystick control, don't publish a zero on every
+      // re-render (slider moves etc.): that would interrupt the gamepad.
+      if (isEmergencyStop || macroIntervalRef.current) cancelMacro();
       if (intervalRef.current) clearInterval(intervalRef.current);
       if (buttonIntervalRef.current) {
         clearInterval(buttonIntervalRef.current);
@@ -240,7 +258,7 @@ export default function Teleop({
     return () => {
       if (intervalRef.current) clearInterval(intervalRef.current);
     };
-  }, [activeKeys, activeMacro, cancelMacro, effectiveMaxAng, effectiveMaxLin, isEmergencyStop, onSendVelocity]);
+  }, [activeKeys, activeMacro, cancelMacro, driveLocked, isEmergencyStop, effectiveMaxAng, effectiveMaxLin, onSendVelocity]);
 
   useEffect(() => () => {
     cancelMacro();
@@ -250,7 +268,7 @@ export default function Teleop({
 
   // Virtual Joystick pointer events
   const handleJoystickStart = (e) => {
-    if (isEmergencyStop) return;
+    if (driveLocked) return;
     cancelMacro();
     if (e.cancelable) e.preventDefault();
     setJoystickActive(true);
@@ -290,6 +308,25 @@ export default function Teleop({
     stopRobot();
   };
 
+  const toggleExternalJoystick = async () => {
+    if (!onSetExternalJoystick || extPending) return;
+    const enable = !extEnabled;
+    // Stop any on-screen drive before handing control to the gamepad.
+    if (enable) stopRobot();
+    setExtPending(true);
+    try {
+      await onSetExternalJoystick(enable);
+    } finally {
+      setExtPending(false);
+    }
+  };
+
+  // STOP also takes control back from the external gamepad.
+  const handleStopClick = () => {
+    if (extEnabled) onSetExternalJoystick?.(false);
+    stopRobot();
+  };
+
   const setSpeedPreset = (lin, ang) => {
     setMaxLin(lin);
     setMaxAng(ang);
@@ -298,10 +335,13 @@ export default function Teleop({
   // Motion Dynamics Telemetry State
   const currentVx = velocity?.linear ?? 0.0;
   const currentWz = velocity?.angular ?? 0.0;
-  const isMoving = Math.abs(currentVx) > 0.01 || Math.abs(currentWz) > 0.01;
+  const isMoving = Math.abs(currentVx) > 0.01 || Math.abs(currentWz) > 0.01 ||
+    (extEnabled && Boolean(joystickStatus?.active));
 
   const motionStatusText = isEmergencyStop
     ? 'E-STOPPED'
+    : extEnabled
+    ? joystickStatus?.active ? 'EXT JOYSTICK • DRIVING' : 'EXT JOYSTICK • READY'
     : activeMacro
     ? `MACRO: ${activeMacro.replace(/_/g, ' ')}`
     : Math.abs(currentVx) > 0.02
@@ -321,7 +361,38 @@ export default function Teleop({
           </span>
         </div>
 
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 flex-wrap justify-end">
+          {/* External (robot-side) gamepad toggle */}
+          <button
+            onClick={toggleExternalJoystick}
+            disabled={!connected || !extAvailable || extPending || (!extEnabled && (isEmergencyStop || !extConnected))}
+            role="switch"
+            aria-checked={extEnabled}
+            className={`px-2.5 py-1 rounded-xl text-[10px] font-mono font-bold flex items-center gap-1.5 transition-all border ${
+              extEnabled
+                ? 'bg-gradient-to-r from-emerald-500 to-emerald-600 text-white border-emerald-400 shadow-xs cursor-pointer'
+                : 'bg-slate-900 text-slate-300 border-slate-800 hover:text-white hover:bg-slate-800 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:bg-slate-900 disabled:hover:text-slate-300'
+            }`}
+            title={
+              !connected ? 'Connect to the robot first'
+              : !extAvailable ? 'Joystick gate not running on the robot (bringup use_joystick:=true)'
+              : isEmergencyStop && !extEnabled ? 'Clear the emergency stop first'
+              : !extConnected && !extEnabled ? 'No external joystick detected on the robot'
+              : extEnabled ? 'External joystick has control. Click to return control to the dashboard'
+              : 'Give driving control to the external joystick (hold LB + left stick)'
+            }
+          >
+            <Gamepad2 className={`w-3.5 h-3.5 ${extEnabled ? 'text-white' : 'text-emerald-400'}`} />
+            <span>EXT JOYSTICK</span>
+            <span className={`px-1.5 rounded-md text-[9px] ${extEnabled ? 'bg-slate-950/40' : 'bg-slate-800'}`}>
+              {extPending ? '...' : extEnabled ? 'ON' : 'OFF'}
+            </span>
+            <span
+              className={`h-1.5 w-1.5 rounded-full ${extConnected ? 'bg-emerald-400' : 'bg-slate-600'}`}
+              aria-label={extConnected ? 'joystick connected' : 'joystick not connected'}
+            />
+          </button>
+
           {/* Docking / Inching Precision Mode Toggle */}
           <button
             onClick={() => setIsInchingMode(!isInchingMode)}
@@ -365,6 +436,26 @@ export default function Teleop({
       </div>
 
       <div className="p-3.5 sm:p-4 flex flex-col gap-3.5">
+        {/* External joystick has control */}
+        {extEnabled && (
+          <div className="px-3 py-2 rounded-xl bg-emerald-600/15 border border-emerald-500/40 text-emerald-200 flex items-center justify-between gap-2 text-xs font-mono">
+            <div className="flex items-center gap-2 min-w-0">
+              <Gamepad2 className={`w-4 h-4 shrink-0 text-emerald-400 ${joystickStatus?.active ? 'animate-pulse' : ''}`} />
+              <span className="min-w-0">
+                <strong className="text-emerald-100">External joystick in control.</strong>{' '}
+                Hold LB + left stick to drive (RB = faster). On-screen controls are locked.
+              </span>
+            </div>
+            <button
+              onClick={toggleExternalJoystick}
+              disabled={extPending}
+              className="shrink-0 bg-slate-950/80 hover:bg-slate-950 text-emerald-300 hover:text-white px-2 py-0.5 rounded-lg text-[10px] font-bold cursor-pointer"
+            >
+              RELEASE
+            </button>
+          </div>
+        )}
+
         {/* Active Macro Progress Notification Banner */}
         {activeMacro && (
           <div className="px-3 py-1.5 rounded-xl bg-gradient-to-r from-orange-500 to-orange-600 text-white flex items-center justify-between text-xs font-mono font-bold shadow-xs animate-pulse">
@@ -402,7 +493,7 @@ export default function Teleop({
               onTouchCancel={handleJoystickEnd}
               className={`clay-inset relative h-36 w-36 rounded-full border-2 transition-all flex items-center justify-center cursor-pointer select-none touch-none ${
                 joystickActive ? 'border-orange-500 ring-4 ring-orange-500/20' : 'border-slate-700 hover:border-slate-400'
-              } ${isEmergencyStop ? 'opacity-40 cursor-not-allowed' : ''}`}
+              } ${driveLocked ? 'opacity-40 cursor-not-allowed' : ''}`}
             >
               {/* Crosshairs */}
               <div className="absolute inset-x-0 top-1/2 h-[1px] bg-slate-300 pointer-events-none" />
@@ -443,7 +534,7 @@ export default function Teleop({
                 onPointerDown={(e) => startButtonDrive(effectiveMaxLin, 0.0, 'forward', e)}
                 onPointerUp={handleButtonRelease}
                 onPointerCancel={handleButtonRelease}
-                disabled={isEmergencyStop}
+                disabled={driveLocked}
                 className={`h-10 w-12 rounded-xl flex items-center justify-center border font-mono font-bold transition-all cursor-pointer touch-none select-none ${
                   activeKeys['w'] || activeKeys['arrowup'] || activeButtonDir === 'forward'
                     ? 'bg-gradient-to-r from-orange-500 to-orange-600 text-white border-orange-400 shadow-md ring-2 ring-orange-400/40'
@@ -460,7 +551,7 @@ export default function Teleop({
                   onPointerDown={(e) => startButtonDrive(0.0, effectiveMaxAng, 'left', e)}
                   onPointerUp={handleButtonRelease}
                   onPointerCancel={handleButtonRelease}
-                  disabled={isEmergencyStop}
+                  disabled={driveLocked}
                   className={`h-10 w-12 rounded-xl flex items-center justify-center border font-mono font-bold transition-all cursor-pointer touch-none select-none ${
                     activeKeys['a'] || activeKeys['arrowleft'] || activeButtonDir === 'left'
                       ? 'bg-gradient-to-r from-orange-500 to-orange-600 text-white border-orange-400 shadow-md ring-2 ring-orange-400/40'
@@ -472,7 +563,7 @@ export default function Teleop({
                 </button>
 
                 <button
-                  onClick={stopRobot}
+                  onClick={handleStopClick}
                   className="h-10 w-14 rounded-xl flex items-center justify-center bg-gradient-to-r from-red-600 to-red-700 hover:from-red-500 hover:to-red-600 text-white font-mono font-extrabold transition-all shadow-md active:scale-95 text-[10px] touch-none select-none cursor-pointer border border-red-500/40"
                   title="Brake / Stop (Spacebar)"
                 >
@@ -484,7 +575,7 @@ export default function Teleop({
                   onPointerDown={(e) => startButtonDrive(0.0, -effectiveMaxAng, 'right', e)}
                   onPointerUp={handleButtonRelease}
                   onPointerCancel={handleButtonRelease}
-                  disabled={isEmergencyStop}
+                  disabled={driveLocked}
                   className={`h-10 w-12 rounded-xl flex items-center justify-center border font-mono font-bold transition-all cursor-pointer touch-none select-none ${
                     activeKeys['d'] || activeKeys['arrowright'] || activeButtonDir === 'right'
                       ? 'bg-gradient-to-r from-orange-500 to-orange-600 text-white border-orange-400 shadow-md ring-2 ring-orange-400/40'
@@ -501,7 +592,7 @@ export default function Teleop({
                 onPointerDown={(e) => startButtonDrive(-effectiveMaxLin, 0.0, 'backward', e)}
                 onPointerUp={handleButtonRelease}
                 onPointerCancel={handleButtonRelease}
-                disabled={isEmergencyStop}
+                disabled={driveLocked}
                 className={`h-10 w-12 rounded-xl flex items-center justify-center border font-mono font-bold transition-all cursor-pointer touch-none select-none ${
                   activeKeys['s'] || activeKeys['arrowdown'] || activeButtonDir === 'backward'
                     ? 'bg-gradient-to-r from-orange-500 to-orange-600 text-white border-orange-400 shadow-md ring-2 ring-orange-400/40'
@@ -583,7 +674,7 @@ export default function Teleop({
           <div className="grid grid-cols-5 gap-1.5">
             <button
               onClick={() => executeMacro('NUDGE_FWD', 0.12, 0.0, 850)}
-              disabled={isEmergencyStop}
+              disabled={driveLocked}
               className="btn-clay-white py-1.5 px-1 rounded-xl text-[10px] font-bold text-center hover:text-orange-400 transition-all cursor-pointer flex flex-col items-center gap-0.5"
               title="Nudge robot forward ~10cm"
             >
@@ -593,7 +684,7 @@ export default function Teleop({
 
             <button
               onClick={() => executeMacro('NUDGE_BACK', -0.12, 0.0, 850)}
-              disabled={isEmergencyStop}
+              disabled={driveLocked}
               className="btn-clay-white py-1.5 px-1 rounded-xl text-[10px] font-bold text-center hover:text-orange-400 transition-all cursor-pointer flex flex-col items-center gap-0.5"
               title="Nudge robot backward ~10cm"
             >
@@ -603,7 +694,7 @@ export default function Teleop({
 
             <button
               onClick={() => executeMacro('PIVOT_90_L', 0.0, 0.40, 3920)}
-              disabled={isEmergencyStop}
+              disabled={driveLocked}
               className="btn-clay-white py-1.5 px-1 rounded-xl text-[10px] font-bold text-center hover:text-orange-400 transition-all cursor-pointer flex flex-col items-center gap-0.5"
               title="Pivot 90 degrees counter-clockwise"
             >
@@ -613,7 +704,7 @@ export default function Teleop({
 
             <button
               onClick={() => executeMacro('PIVOT_90_R', 0.0, -0.40, 3920)}
-              disabled={isEmergencyStop}
+              disabled={driveLocked}
               className="btn-clay-white py-1.5 px-1 rounded-xl text-[10px] font-bold text-center hover:text-orange-400 transition-all cursor-pointer flex flex-col items-center gap-0.5"
               title="Pivot 90 degrees clockwise"
             >
@@ -623,7 +714,7 @@ export default function Teleop({
 
             <button
               onClick={() => executeMacro('SPIN_180', 0.0, 0.45, 6980)}
-              disabled={isEmergencyStop}
+              disabled={driveLocked}
               className="btn-clay-white py-1.5 px-1 rounded-xl text-[10px] font-bold text-center hover:text-orange-400 transition-all cursor-pointer flex flex-col items-center gap-0.5"
               title="180 degree U-Turn spin"
             >

@@ -68,6 +68,16 @@
     value="500"/>
 
   <!--
+    Consecutive transient Modbus failures (timeout / CRC / bad reply)
+    tolerated before the hardware is deactivated. A one-off glitch (for
+    example while another USB device is plugged in) is retried instead of
+    stopping the robot. 1 = stop on the first failure.
+  -->
+  <xacro:property
+    name="max_consecutive_comm_failures"
+    value="3"/>
+
+  <!--
     Enforced safety ceiling on commanded motor speed, RPM.
 
     SOURCE_VERIFIED default: the ZLLG50ASM200 V2.0 motor parameter sheet

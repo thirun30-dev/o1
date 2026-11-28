@@ -76,6 +76,8 @@ export default function App() {
     sendLocationCommand,
     sendGoal,
     sendVelocity,
+    joystickStatus,
+    setExternalJoystick,
     setMode,
     mapOperation,
     saveMap,
@@ -341,6 +343,8 @@ export default function App() {
                       connected={connected}
                       isEmergencyStop={systemState?.is_emergency_stop}
                       onSendVelocity={sendVelocity}
+                      joystickStatus={joystickStatus}
+                      onSetExternalJoystick={setExternalJoystick}
                       velocity={velocity}
                       battery={battery}
                       laserScan={laserScan}

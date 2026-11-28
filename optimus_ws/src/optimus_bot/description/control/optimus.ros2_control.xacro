@@ -56,6 +56,11 @@
         ${timeout_ms}
       </param>
 
+      <!-- Consecutive transient Modbus failures tolerated before stopping -->
+      <param name="max_consecutive_comm_failures">
+        ${max_consecutive_comm_failures}
+      </param>
+
       <!-- Enforced safety limit: must not exceed motor peak RPM (350) -->
       <param name="max_velocity_rpm">
         ${max_velocity_rpm}

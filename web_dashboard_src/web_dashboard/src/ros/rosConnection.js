@@ -64,7 +64,8 @@ class ROSConnectionManager {
       voiceResponse: [],
       voiceState: [],
       voiceTranscript: [],
-      cameraFeeds: []
+      cameraFeeds: [],
+      joystickStatus: []
     };
     // Last /dashboard/camera/feeds listing, for components mounted later.
     this.cameraFeeds = [];
@@ -404,6 +405,20 @@ class ROSConnectionManager {
     subscribeString('voiceState', '/optimus/voice/state', 'voiceState');
     subscribeString('voiceTranscript', '/optimus/voice/transcript', 'voiceTranscript');
 
+    // 13b. External gamepad gate (joystick_gate_node): enabled / connected
+    this.topics.joystickStatus = new ROSLIB.Topic({
+      ros: this.ros,
+      name: '/amr/joystick/status',
+      messageType: 'std_msgs/String'
+    });
+    this.topics.joystickStatus.subscribe((msg) => {
+      try {
+        this._emit('joystickStatus', JSON.parse(msg.data));
+      } catch (e) {
+        console.warn('Failed to parse joystick status', e);
+      }
+    });
+
     // 14. Dashboard camera feeds (camera_stream_node). Only the listing is
     // subscribed here; the images themselves are subscribed on demand by
     // subscribeCamera() so nothing is streamed while no one is watching.
@@ -724,6 +739,14 @@ class ROSConnectionManager {
       this.sendCommand({ action: 'cancel_navigation' });
       return { success: true, message: 'Cancel requested via topic' };
     }
+  }
+
+  // Enable / disable the robot-side external gamepad (joystick_gate_node).
+  // No topic fallback: if the gate is not running the toggle must fail.
+  async setExternalJoystick(enabled) {
+    return this.callService('/amr/joystick/enable', 'std_srvs/srv/SetBool', {
+      data: Boolean(enabled)
+    });
   }
 
   // Emergency Stop Safety Protocol

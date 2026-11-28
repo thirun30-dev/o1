@@ -45,9 +45,12 @@ zlac_drive:
       gear_ratio_verified: false
 
     direction:
-      left_motor_inverted: false
+      # PHYSICALLY_VERIFIED 2026-11-28: forward = left raw -RPM, right
+      # raw +RPM; equal raw signs rotate in place (+ = left turn).
+      # Matches real_hardware.xacro (left 1, right 0).
+      left_motor_inverted: true
       right_motor_inverted: false
-      verified: false
+      verified: true
 
     safety:
       enabled: true

@@ -35,6 +35,8 @@ export function useRos() {
   const [velocity, setVelocity] = useState({ linear: 0.0, angular: 0.0 });
   const [operationResult, setOperationResult] = useState(null);
   const [notice, setNotice] = useState('');
+  // null until joystick_gate_node reports (e.g. bringup with use_joystick:=false)
+  const [joystickStatus, setJoystickStatus] = useState(null);
 
   const simVelRef = useRef({ vx: 0.0, wz: 0.0 });
   const lastBridgePoseAtRef = useRef(0);
@@ -53,6 +55,7 @@ export function useRos() {
     };
     const onClose = () => {
       setConnected(false);
+      setJoystickStatus(null);
       setNotice('ROS Bridge disconnected');
     };
     const onError = () => {
@@ -161,6 +164,7 @@ export function useRos() {
     rosConnection.on('localPlan', onLocalPlan);
     rosConnection.on('odom', onOdom);
     rosConnection.on('operationResult', onOperation);
+    rosConnection.on('joystickStatus', setJoystickStatus);
 
     return () => {
       rosConnection.off('connection', onConn);
@@ -181,6 +185,7 @@ export function useRos() {
       rosConnection.off('localPlan', onLocalPlan);
       rosConnection.off('odom', onOdom);
       rosConnection.off('operationResult', onOperation);
+      rosConnection.off('joystickStatus', setJoystickStatus);
     };
   }, []);
 
@@ -220,6 +225,18 @@ export function useRos() {
       rosConnection.sendVelocity(vx, wz);
     }
   }, [connected]);
+
+  const setExternalJoystick = useCallback(async (enabled) => {
+    try {
+      const res = await rosConnection.setExternalJoystick(enabled);
+      if (res && res.success === false) setNotice(res.message || 'Joystick request rejected');
+      return res;
+    } catch (err) {
+      const message = `External joystick unavailable: ${err?.message || err}`;
+      setNotice(message);
+      return { success: false, message };
+    }
+  }, []);
 
   const sendGoal = (x, y, yaw = 0.0, frame = 'map') => {
     if (connected) {
@@ -440,6 +457,8 @@ export function useRos() {
     sendLocationCommand,
     sendGoal,
     sendVelocity,
+    joystickStatus,
+    setExternalJoystick,
     setMode,
     mapOperation,
     saveMap,

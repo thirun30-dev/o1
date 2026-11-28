@@ -26,6 +26,16 @@ inline constexpr const char * kGearRatio = "gear_ratio";
 // Optional communication parameters.
 inline constexpr const char * kTimeoutMs = "timeout_ms";
 
+/**
+ * Consecutive transient Modbus failures (timeout, CRC, malformed reply)
+ * tolerated before read()/write() report ERROR and ros2_control
+ * deactivates the hardware. 1 restores the strict fail-on-first-error
+ * behaviour. Worst-case time on stale feedback / held command is
+ * roughly this value multiplied by timeout_ms.
+ */
+inline constexpr const char * kMaxConsecutiveCommFailures =
+  "max_consecutive_comm_failures";
+
 // Optional safety parameters.
 
 /**

@@ -31,6 +31,8 @@
   <exec_depend condition="$ROS_DISTRO != humble">ros_gz_bridge</exec_depend>
   <exec_depend condition="$ROS_DISTRO != humble">gz_ros2_control</exec_depend>
   <exec_depend>teleop_twist_keyboard</exec_depend>
+  <exec_depend>joy</exec_depend>
+  <exec_depend>teleop_twist_joy</exec_depend>
   <exec_depend>zlac_drive</exec_depend>
   <exec_depend>rplidar_ros</exec_depend>
   <!-- Obstacle camera: OpenCV for the laptop/USB webcam, camera_ros (libcamera) for the Pi camera. -->

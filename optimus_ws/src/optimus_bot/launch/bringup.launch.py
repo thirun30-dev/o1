@@ -118,6 +118,13 @@ def generate_launch_description():
         description=('Depth camera profile from optimus_depth/config/depth_camera.yaml: '
                      'realsense, orbbec or none')
     )
+    use_joystick_arg = DeclareLaunchArgument(
+        'use_joystick',
+        default_value='true',
+        description=('Start the external gamepad driver (joy + teleop_twist_joy) and '
+                     'joystick_gate. Driving stays off until the dashboard '
+                     'EXTERNAL JOYSTICK toggle enables it; hold LB to drive')
+    )
     camera_arg = DeclareLaunchArgument(
         'camera',
         default_value='laptop',
@@ -220,7 +227,38 @@ def generate_launch_description():
         condition=IfCondition(use_location_manager)
     )
 
-    # 6. Voice command node (optional). The package is located lazily so bringup
+    # 6. External gamepad: joy_node -> teleop_twist_joy -> joystick_gate -> /cmd_vel.
+    #    The gate only forwards while the dashboard toggle is on.
+    joystick_params = os.path.join(pkg_optimus, 'config', 'joystick.yaml')
+    joystick_group = GroupAction(
+        condition=IfCondition(LaunchConfiguration('use_joystick')),
+        actions=[
+            Node(
+                package='joy',
+                executable='joy_node',
+                name='joy_node',
+                output='screen',
+                parameters=[joystick_params, {'use_sim_time': use_sim_time}],
+            ),
+            Node(
+                package='teleop_twist_joy',
+                executable='teleop_node',
+                name='teleop_twist_joy_node',
+                output='screen',
+                parameters=[joystick_params, {'use_sim_time': use_sim_time}],
+                remappings=[('cmd_vel', '/joy_teleop/cmd_vel')],
+            ),
+            Node(
+                package='optimus_bot',
+                executable='joystick_gate_node.py',
+                name='joystick_gate',
+                output='screen',
+                parameters=[joystick_params, {'use_sim_time': use_sim_time}],
+            ),
+        ]
+    )
+
+    # 7. Voice command node (optional). The package is located lazily so bringup
     #    still works on machines where optimus_voice is not installed.
     voice_launch = IncludeLaunchDescription(
         PythonLaunchDescriptionSource(PathJoinSubstitution(
@@ -245,11 +283,13 @@ def generate_launch_description():
         lidar_frame_arg,
         camera_arg,
         depth_camera_arg,
+        use_joystick_arg,
         sim_launch,
         real_robot_launch,
         rosbridge_launch,
         system_mgr_node,
         location_mgr_node,
         voice_launch,
+        joystick_group,
         OpaqueFunction(function=_camera_stream)
     ])

@@ -95,6 +95,21 @@ private:
    */
   void reset_interfaces();
 
+  /**
+   * Record a transient Modbus failure from read()/write(). Returns OK
+   * while the consecutive-failure count is within
+   * max_consecutive_comm_failures_, ERROR once it is exceeded.
+   */
+  hardware_interface::return_type handle_comm_failure(
+    const char * operation,
+    unsigned int & consecutive_failures,
+    const std::exception & exception);
+
+  /** Clear a consecutive-failure count after a successful exchange. */
+  void note_comm_success(
+    const char * operation,
+    unsigned int & consecutive_failures);
+
   // ============================================================
   // Hardware communication configuration
   // ============================================================
@@ -106,6 +121,13 @@ private:
   int slave_id_{1};
 
   int timeout_ms_{100};
+
+  int max_consecutive_comm_failures_{3};
+
+  // Consecutive transient Modbus failures, counted separately so that
+  // successful reads cannot mask writes that keep failing (or vice versa).
+  unsigned int consecutive_read_failures_{0};
+  unsigned int consecutive_write_failures_{0};
 
   double max_velocity_rpm_{
     zlac_drive::driver::MotorLimits::kPeakRpm};

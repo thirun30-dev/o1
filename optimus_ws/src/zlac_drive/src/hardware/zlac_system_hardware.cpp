@@ -2,6 +2,7 @@
 
 #include "zlac_drive/config/hardware_parameters.hpp"
 #include "zlac_drive/driver/motor.hpp"
+#include "zlac_drive/modbus/modbus_exception.hpp"
 
 #include <chrono>
 #include <cctype>
@@ -330,6 +331,34 @@ ZlacSystemHardware::on_init(
   }
 
   // ==========================================================
+  // Parse optional transient-failure tolerance
+  // ==========================================================
+
+  const auto max_failures_it =
+    info_.hardware_parameters.find(
+    zlac_drive::config::kMaxConsecutiveCommFailures);
+
+  if (max_failures_it != info_.hardware_parameters.end()) {
+    try {
+      max_consecutive_comm_failures_ = std::stoi(max_failures_it->second);
+    } catch (const std::exception & exception) {
+      RCLCPP_ERROR(
+        logger,
+        "Invalid max_consecutive_comm_failures '%s': %s",
+        max_failures_it->second.c_str(),
+        exception.what());
+      return hardware_interface::CallbackReturn::ERROR;
+    }
+
+    if (max_consecutive_comm_failures_ < 1) {
+      RCLCPP_ERROR(
+        logger,
+        "max_consecutive_comm_failures must be at least 1");
+      return hardware_interface::CallbackReturn::ERROR;
+    }
+  }
+
+  // ==========================================================
   // Parse optional safety limit (max_velocity_rpm)
   // ==========================================================
 
@@ -558,6 +587,8 @@ ZlacSystemHardware::on_activate(
   }
 
   reset_interfaces();
+  consecutive_read_failures_ = 0;
+  consecutive_write_failures_ = 0;
 
   try {
 
@@ -769,6 +800,21 @@ ZlacSystemHardware::read(
       fault_already_logged_ = false;
     }
 
+  } catch (const zlac_drive::modbus::ConnectionException & exception) {
+
+    RCLCPP_ERROR(
+      logger,
+      "ZLAC8015D read failure: %s",
+      exception.what());
+
+    return hardware_interface::return_type::ERROR;
+
+  } catch (const zlac_drive::modbus::ModbusException & exception) {
+
+    // Timeout / CRC / malformed reply: keep the previous feedback for
+    // this cycle and retry on the next one.
+    return handle_comm_failure("read", consecutive_read_failures_, exception);
+
   } catch (const std::exception & exception) {
 
     RCLCPP_ERROR(
@@ -779,6 +825,7 @@ ZlacSystemHardware::read(
     return hardware_interface::return_type::ERROR;
   }
 
+  note_comm_success("read", consecutive_read_failures_);
   return hardware_interface::return_type::OK;
 }
 
@@ -846,6 +893,21 @@ ZlacSystemHardware::write(
     last_command_valid_ = true;
     cycles_since_command_ = 0;
 
+  } catch (const zlac_drive::modbus::ConnectionException & exception) {
+
+    RCLCPP_ERROR(
+      rclcpp::get_logger("ZlacSystemHardware"),
+      "ZLAC8015D write failure: %s",
+      exception.what());
+
+    return hardware_interface::return_type::ERROR;
+
+  } catch (const zlac_drive::modbus::ModbusException & exception) {
+
+    // Force the command to be re-sent on the next cycle.
+    last_command_valid_ = false;
+    return handle_comm_failure("write", consecutive_write_failures_, exception);
+
   } catch (const std::exception & exception) {
 
     RCLCPP_ERROR(
@@ -856,7 +918,67 @@ ZlacSystemHardware::write(
     return hardware_interface::return_type::ERROR;
   }
 
+  if (last_command_valid_ && cycles_since_command_ == 0) {
+    note_comm_success("write", consecutive_write_failures_);
+  }
   return hardware_interface::return_type::OK;
+}
+
+
+hardware_interface::return_type
+ZlacSystemHardware::handle_comm_failure(
+  const char * operation,
+  unsigned int & consecutive_failures,
+  const std::exception & exception)
+{
+  const auto logger =
+    rclcpp::get_logger("ZlacSystemHardware");
+
+  ++consecutive_failures;
+
+  if (
+    consecutive_failures >=
+    static_cast<unsigned int>(max_consecutive_comm_failures_))
+  {
+    RCLCPP_ERROR(
+      logger,
+      "ZLAC8015D %s failure: %s (%u consecutive communication failures, "
+      "limit %d) - stopping",
+      operation,
+      exception.what(),
+      consecutive_failures,
+      max_consecutive_comm_failures_);
+
+    return hardware_interface::return_type::ERROR;
+  }
+
+  RCLCPP_WARN(
+    logger,
+    "ZLAC8015D %s failure: %s (%u/%d consecutive, retrying next cycle)",
+    operation,
+    exception.what(),
+    consecutive_failures,
+    max_consecutive_comm_failures_);
+
+  return hardware_interface::return_type::OK;
+}
+
+
+void ZlacSystemHardware::note_comm_success(
+  const char * operation,
+  unsigned int & consecutive_failures)
+{
+  if (consecutive_failures == 0) {
+    return;
+  }
+
+  RCLCPP_INFO(
+    rclcpp::get_logger("ZlacSystemHardware"),
+    "ZLAC8015D communication recovered on %s after %u failure(s)",
+    operation,
+    consecutive_failures);
+
+  consecutive_failures = 0;
 }
 
 
